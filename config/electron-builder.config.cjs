@@ -223,10 +223,20 @@ module.exports = {
         from: 'node_modules/serve-sim',
         to: 'serve-sim'
       },
-      {
-        from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
-        to: 'Orca Computer Use.app'
-      },
+      // [FORK] Include the computer-use helper only when it was actually built.
+      // The native Swift helper can't build without full Xcode (CLT SwiftPM is
+      // broken on macOS 26), so local dev builds omit it and computer-use stays
+      // disabled. Release builds (full Xcode) still bundle it as before.
+      ...(existsSync(
+        resolve(__dirname, '../native/computer-use-macos/.build/release/Orca Computer Use.app')
+      )
+        ? [
+            {
+              from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
+              to: 'Orca Computer Use.app'
+            }
+          ]
+        : []),
       featureWallResources
     ],
     target: [
