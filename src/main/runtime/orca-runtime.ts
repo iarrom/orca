@@ -501,6 +501,11 @@ import {
   listTeamsOrThrow as listLinearTeamsOrThrow
 } from '../linear/teams'
 import {
+  listNotifications as listLinearNotifications,
+  markAllNotificationsRead as markAllLinearNotificationsRead,
+  markNotificationRead as markLinearNotificationRead
+} from '../linear/notifications'
+import {
   connect as connectJira,
   disconnect as disconnectJira,
   getStatus as getJiraStatus,
@@ -21744,6 +21749,30 @@ export class OrcaRuntimeService {
 
   linearTeamMembers(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamMembers> {
     return getLinearTeamMembers(teamId, workspaceId)
+  }
+
+  // [FORK] Linear inbox notifications (Linear-parity Tasks page).
+  linearNotifications(
+    limit?: number,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof listLinearNotifications> {
+    return listLinearNotifications(
+      limit === undefined ? undefined : Math.min(Math.max(1, limit), 100),
+      workspaceId
+    )
+  }
+
+  linearNotificationMarkRead(
+    id: string,
+    workspaceId?: string
+  ): ReturnType<typeof markLinearNotificationRead> {
+    return markLinearNotificationRead(id, workspaceId)
+  }
+
+  linearNotificationMarkAllRead(
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof markAllLinearNotificationsRead> {
+    return markAllLinearNotificationsRead(workspaceId)
   }
 
   // ── Jira integration ──

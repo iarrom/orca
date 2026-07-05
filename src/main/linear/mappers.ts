@@ -36,11 +36,12 @@ export async function mapLinearIssue(
   issue: Issue | IssueSearchResult,
   options: MapLinearIssueOptions = {}
 ): Promise<LinearIssue> {
-  const [state, team, assignee, project] = await Promise.all([
+  const [state, team, assignee, project, cycle] = await Promise.all([
     optionalRelation(issue.state),
     optionalRelation(issue.team),
     optionalRelation(issue.assignee),
-    options.includeProject ? optionalRelation(issue.project) : Promise.resolve(undefined)
+    options.includeProject ? optionalRelation(issue.project) : Promise.resolve(undefined),
+    'cycle' in issue ? optionalRelation(issue.cycle) : Promise.resolve(undefined)
   ])
 
   // Why: IssueSearchResult does not expose the labels() relation method — only
@@ -108,6 +109,17 @@ export async function mapLinearIssue(
     estimate: issue.estimate ?? null,
     priority: issue.priority,
     dueDate: 'dueDate' in issue ? ((issue.dueDate as string | null | undefined) ?? null) : null,
-    updatedAt: issue.updatedAt.toISOString()
+    updatedAt: issue.updatedAt.toISOString(),
+    createdAt:
+      'createdAt' in issue && issue.createdAt instanceof Date
+        ? issue.createdAt.toISOString()
+        : undefined,
+    cycle: cycle
+      ? {
+          id: cycle.id,
+          name: cycle.name ?? undefined,
+          number: typeof cycle.number === 'number' ? cycle.number : undefined
+        }
+      : undefined
   }
 }

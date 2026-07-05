@@ -113,6 +113,7 @@ import type {
   LinearWorkflowState,
   LinearLabel,
   LinearMember,
+  LinearNotification,
   LinearProjectDetail,
   LinearProjectSummary,
   LinearTeam,
@@ -1788,6 +1789,18 @@ export type PreloadApi = {
     teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
     teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
+    // [FORK] Linear inbox notifications (Linear-parity Tasks page).
+    notifications: (args?: {
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<LinearCollectionResult<LinearNotification>>
+    notificationMarkRead: (args: {
+      id: string
+      workspaceId?: string
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    notificationMarkAllRead: (args?: {
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
   }
   jira: {
     connect: (args: {

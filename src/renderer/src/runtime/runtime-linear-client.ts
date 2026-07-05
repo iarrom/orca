@@ -12,6 +12,7 @@ import type {
   LinearIssueUpdate,
   LinearLabel,
   LinearMember,
+  LinearNotification,
   LinearProjectDetail,
   LinearProjectSummary,
   LinearTeam,
@@ -551,4 +552,90 @@ export async function linearTeamMembers(
         { timeoutMs: 30_000 }
       )
     : window.api.linear.teamMembers({ teamId, workspaceId: workspaceId ?? undefined })
+}
+
+// [FORK] Linear inbox notifications (Linear-parity Tasks page).
+
+function normalizeLinearNotificationCollectionResult(
+  result: unknown
+): LinearCollectionResult<LinearNotification> {
+  if (!result || typeof result !== 'object') {
+    return { items: [] }
+  }
+  const collection = result as Partial<LinearCollectionResult<LinearNotification>>
+  if (!Array.isArray(collection.items)) {
+    return { items: [] }
+  }
+  return {
+    items: collection.items,
+    ...(Array.isArray(collection.errors) ? { errors: collection.errors } : {})
+  }
+}
+
+export async function linearNotifications(
+  settings: RuntimeLinearSettings,
+  limit?: number,
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<LinearCollectionResult<LinearNotification>> {
+  const target = getLinearRuntimeTarget(settings)
+  const result =
+    target.kind === 'environment'
+      ? await callRuntimeRpc<unknown>(
+          target,
+          'linear.notifications',
+          { limit, workspaceId: workspaceId ?? undefined },
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.linear.notifications({ limit, workspaceId: workspaceId ?? undefined })
+  return normalizeLinearNotificationCollectionResult(result)
+}
+
+/** Why: read-state writes surface as the unread dot only — callers need a
+ *  success flag, not a user-facing message, so no literal leaves this layer. */
+export async function linearNotificationMarkRead(
+  settings: RuntimeLinearSettings,
+  id: string,
+  workspaceId?: string | null
+): Promise<boolean> {
+  const target = getLinearRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    try {
+      return await callRuntimeRpc<boolean>(
+        target,
+        'linear.notificationMarkRead',
+        { id, workspaceId: workspaceId ?? undefined },
+        { timeoutMs: 30_000 }
+      )
+    } catch {
+      return false
+    }
+  }
+  const result = await window.api.linear.notificationMarkRead({
+    id,
+    workspaceId: workspaceId ?? undefined
+  })
+  return result.ok
+}
+
+export async function linearNotificationMarkAllRead(
+  settings: RuntimeLinearSettings,
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<boolean> {
+  const target = getLinearRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    try {
+      return await callRuntimeRpc<boolean>(
+        target,
+        'linear.notificationMarkAllRead',
+        { workspaceId: workspaceId ?? undefined },
+        { timeoutMs: 30_000 }
+      )
+    } catch {
+      return false
+    }
+  }
+  const result = await window.api.linear.notificationMarkAllRead({
+    workspaceId: workspaceId ?? undefined
+  })
+  return result.ok
 }

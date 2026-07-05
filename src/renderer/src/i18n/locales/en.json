@@ -1697,7 +1697,8 @@
         "searchIssues": "Search issues",
         "useIssueNumber": "Use issue #{{value0}}",
         "noMatchingIssuesLoaded": "No matching issues loaded.",
-        "editReviewersWithCurrent": "Edit reviewers: {{value0}}"
+        "editReviewersWithCurrent": "Edit reviewers: {{value0}}",
+        "4a1d0148c0": "Project"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -12292,6 +12293,100 @@
       "nativeChat": {
         "contextMenu": {
           "copy": "Copy"
+        }
+      },
+      "tasks": {
+        "nav": {
+          "myIssues": "My Issues",
+          "allIssues": "All issues",
+          "inbox": "Inbox",
+          "unread": "{{count}} unread notifications",
+          "workspace": "Workspace",
+          "favorites": "Favorites",
+          "yourTeams": "Your teams"
+        },
+        "details": {
+          "local": "Local",
+          "shared": "Shared",
+          "personal": "Personal",
+          "assignees": "Assignees",
+          "teams": "Teams",
+          "unfavorite": "Remove from favorites",
+          "favorite": "Add to favorites",
+          "close": "Close view details",
+          "noValues": "Nothing to show yet"
+        },
+        "saveView": {
+          "title": "Save view",
+          "description": "Saves the current filters, grouping, ordering, and display properties as a view in the sidebar.",
+          "placeholder": "View name"
+        },
+        "filters": {
+          "saveView": "Save view",
+          "statusIs": "Status is {{value0}}",
+          "assigneeIs": "Assignee is {{value0}}",
+          "labelIs": "Label is {{value0}}",
+          "priorityIs": "Priority is {{value0}}",
+          "projectIs": "Project is {{value0}}",
+          "filter": "Filter",
+          "placeholder": "Filter by...",
+          "empty": "No matching filters",
+          "remove": "Remove filter",
+          "reset": "Reset",
+          "updateView": "Update view"
+        },
+        "header": {
+          "rename": "Rename view",
+          "viewActions": "View actions",
+          "openInLinear": "Open in Linear",
+          "delete": "Delete view",
+          "issueCount": "{{count}} issues",
+          "details": "View details"
+        },
+        "options": {
+          "cycle": "Cycle",
+          "created": "Created",
+          "dueDate": "Due date",
+          "estimate": "Estimate"
+        },
+        "group": {
+          "cycleNumber": "Cycle {{number}}",
+          "cycle": "Cycle",
+          "noProject": "No project",
+          "expand": "Expand {{value0}}",
+          "collapse": "Collapse {{value0}}",
+          "newIssue": "New issue in {{value0}}",
+          "unassigned": "Unassigned",
+          "noCycle": "No cycle"
+        },
+        "display": {
+          "title": "Display options",
+          "showEmptyGroups": "Show empty groups"
+        },
+        "inbox": {
+          "assigned": "Assigned to you",
+          "mention": "Mentioned you",
+          "commentMention": "Mentioned you in a comment",
+          "newComment": "New comment",
+          "statusChanged": "Status changed",
+          "reaction": "Reaction",
+          "blocking": "Blocking issue",
+          "due": "Due soon",
+          "minutesAgo": "{{count}}m",
+          "hoursAgo": "{{count}}h",
+          "markAllRead": "Mark all as read",
+          "emptyTitle": "Inbox zero",
+          "emptyBody": "New issue notifications from Linear will appear here."
+        },
+        "status": {
+          "draft": "Draft",
+          "merged": "Merged",
+          "closed": "Closed",
+          "open": "Open",
+          "locked": "Locked",
+          "done": "Done",
+          "inProgress": "In Progress",
+          "todo": "To Do"
         }
       }
     },

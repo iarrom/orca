@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
+import { LINEAR_NOTIFICATION_METHODS } from './linear-notifications'
 
 const VALID_FILTERS = ['assigned', 'created', 'all', 'completed'] as const
 const VALID_CUSTOM_VIEW_MODELS = ['issue', 'project'] as const
@@ -280,6 +281,8 @@ export const LINEAR_METHODS: RpcMethod[] = [
         params.force
       )
   }),
+  // [FORK] Linear inbox notifications live in linear-notifications.ts.
+  ...LINEAR_NOTIFICATION_METHODS,
   defineMethod({
     name: 'linear.teamStates',
     params: TeamId,

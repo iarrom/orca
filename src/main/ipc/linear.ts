@@ -23,6 +23,11 @@ import {
   listProjects
 } from '../linear/projects'
 import { listTeams, getTeamStates, getTeamLabels, getTeamMembers } from '../linear/teams'
+import {
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead
+} from '../linear/notifications'
 import type { LinearListFilter } from '../linear/issues'
 import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import type {
@@ -486,6 +491,50 @@ export function registerLinearHandlers(): void {
         normalizeConcreteWorkspaceId(args.workspaceId),
         args.force === true
       )
+    }
+  )
+
+  // [FORK] Linear inbox notifications (Linear-parity Tasks page).
+  ipcMain.handle(
+    'linear:notifications',
+    async (_event, args?: { limit?: number; workspaceId?: LinearWorkspaceSelection }) => {
+      const limit =
+        typeof args?.limit === 'number' && Number.isFinite(args.limit)
+          ? Math.min(Math.max(1, args.limit), 100)
+          : undefined
+      return listNotifications(limit, normalizeWorkspaceSelection(args?.workspaceId))
+    }
+  )
+
+  ipcMain.handle(
+    'linear:notificationMarkRead',
+    async (_event, args: { id: string; workspaceId?: string }) => {
+      if (typeof args?.id !== 'string' || !args.id.trim()) {
+        return { ok: false, error: 'Notification ID is required' }
+      }
+      try {
+        const success = await markNotificationRead(
+          args.id.trim(),
+          normalizeWorkspaceId(args.workspaceId)
+        )
+        return success ? { ok: true } : { ok: false, error: 'Linear rejected the update' }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'linear:notificationMarkAllRead',
+    async (_event, args?: { workspaceId?: LinearWorkspaceSelection }) => {
+      try {
+        const success = await markAllNotificationsRead(
+          normalizeWorkspaceSelection(args?.workspaceId)
+        )
+        return success ? { ok: true } : { ok: false, error: 'Linear rejected the update' }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
     }
   )
 

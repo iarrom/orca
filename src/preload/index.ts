@@ -1533,7 +1533,22 @@ const api = {
       ipcRenderer.invoke('linear:teamLabels', args),
 
     teamMembers: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('linear:teamMembers', args)
+      ipcRenderer.invoke('linear:teamMembers', args),
+
+    // [FORK] Linear inbox notifications (Linear-parity Tasks page).
+    notifications: (args?: { limit?: number; workspaceId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('linear:notifications', args),
+
+    notificationMarkRead: (args: {
+      id: string
+      workspaceId?: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:notificationMarkRead', args),
+
+    notificationMarkAllRead: (args?: {
+      workspaceId?: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:notificationMarkAllRead', args)
   },
 
   jira: {

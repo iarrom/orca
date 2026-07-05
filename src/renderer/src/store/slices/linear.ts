@@ -10,6 +10,7 @@ import type {
   LinearCustomViewModel,
   LinearCustomViewSummary,
   LinearIssue,
+  LinearNotification,
   LinearProjectDetail,
   LinearProjectSummary,
   LinearTeam,
@@ -35,6 +36,9 @@ import {
   linearListProjectIssues,
   linearListProjects,
   linearListTeams,
+  linearNotificationMarkAllRead,
+  linearNotificationMarkRead,
+  linearNotifications,
   linearSearchIssues,
   linearSelectWorkspace,
   linearStatus,
@@ -174,6 +178,14 @@ const inflightCustomViewProjectRequests = new Map<
   string,
   InflightLinearCollectionRequest<LinearProjectSummary>
 >()
+// [FORK] Linear inbox notifications (Linear-parity Tasks page).
+const inflightNotificationRequests = new Map<
+  string,
+  InflightLinearCollectionRequest<LinearNotification>
+>()
+// Why: the inbox is the page users watch for new activity — keep it fresher
+// than the 60s issue caches without hammering the API from the unread dot.
+const NOTIFICATION_CACHE_TTL = 30_000
 let inflightStatusRequest: { contextKey: string; promise: Promise<void> } | null = null
 let linearStatusReadGeneration = 0
 let linearMutationGeneration = 0
@@ -443,6 +455,8 @@ export type LinearSlice = {
     string,
     CacheEntry<LinearCollectionResult<LinearProjectSummary>>
   >
+  /** [FORK] Linear inbox notifications (Linear-parity Tasks page). */
+  linearNotificationCache: Record<string, CacheEntry<LinearCollectionResult<LinearNotification>>>
 
   checkLinearConnection: (force?: boolean) => Promise<void>
   connectLinear: (
@@ -545,6 +559,23 @@ export type LinearSlice = {
     patch: Partial<LinearIssue>,
     options?: LinearPatchOptions
   ) => void
+  /** [FORK] Linear inbox notifications (Linear-parity Tasks page). */
+  getCachedLinearNotifications: (
+    limit?: number,
+    options?: Pick<LinearFetchOptions, 'sourceContext'>
+  ) => LinearCollectionResult<LinearNotification> | null
+  listLinearNotifications: (
+    limit?: number,
+    options?: LinearFetchOptions
+  ) => Promise<LinearCollectionResult<LinearNotification>>
+  markLinearNotificationRead: (
+    id: string,
+    workspaceId?: string | null,
+    options?: Pick<LinearFetchOptions, 'sourceContext'>
+  ) => Promise<boolean>
+  markAllLinearNotificationsRead: (
+    options?: Pick<LinearFetchOptions, 'sourceContext'>
+  ) => Promise<boolean>
 }
 
 export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (set, get) => ({
@@ -562,6 +593,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   linearCustomViewDetailCache: {},
   linearCustomViewIssueCache: {},
   linearCustomViewProjectCache: {},
+  linearNotificationCache: {},
 
   checkLinearConnection: async (force = false) => {
     const contextKey = getProviderRuntimeContextKey(get().settings)
@@ -602,6 +634,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearCustomViewDetailCache: {},
             linearCustomViewIssueCache: {},
             linearCustomViewProjectCache: {},
+            linearNotificationCache: {},
             linearStatusChecked: true,
             linearStatusContextKey: contextKey
           })
@@ -634,6 +667,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearCustomViewDetailCache: {},
             linearCustomViewIssueCache: {},
             linearCustomViewProjectCache: {},
+            linearNotificationCache: {},
             linearStatusChecked: true,
             linearStatusContextKey: contextKey
           })
@@ -690,6 +724,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearCustomViewDetailCache: {},
             linearCustomViewIssueCache: {},
             linearCustomViewProjectCache: {},
+            linearNotificationCache: {},
             linearStatusChecked: true,
             linearStatusContextKey: contextKey
           })
@@ -730,7 +765,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           linearCustomViewCache: {},
           linearCustomViewDetailCache: {},
           linearCustomViewIssueCache: {},
-          linearCustomViewProjectCache: {}
+          linearCustomViewProjectCache: {},
+          linearNotificationCache: {}
         })
         const status = await linearStatus(get().settings)
         if (
@@ -790,6 +826,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearCustomViewDetailCache: {},
       linearCustomViewIssueCache: {},
       linearCustomViewProjectCache: {},
+      linearNotificationCache: {},
       linearStatusChecked: true,
       linearStatusContextKey: contextKey
     })
@@ -819,6 +856,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearCustomViewDetailCache: {},
       linearCustomViewIssueCache: {},
       linearCustomViewProjectCache: {},
+      linearNotificationCache: {},
       linearStatusChecked: true,
       linearStatusContextKey: contextKey
     })
@@ -855,6 +893,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       linearCustomViewDetailCache: {},
       linearCustomViewIssueCache: {},
       linearCustomViewProjectCache: {},
+      linearNotificationCache: {},
       linearStatusChecked: true,
       linearStatusContextKey: contextKey
     })
@@ -2145,5 +2184,170 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           }
         : {}
     })
+  },
+
+  // [FORK] Linear inbox notifications (Linear-parity Tasks page).
+  getCachedLinearNotifications: (limit = 50, options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearCollectionCacheKey(workspaceId, 'notifications', 'inbox', limit)
+    )
+    return get().linearNotificationCache[cacheKey]?.data ?? null
+  },
+
+  listLinearNotifications: async (limit = 50, options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const { contextKey } = scope
+    const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+    const cacheKey = scopedLinearCacheKey(
+      scope,
+      linearCollectionCacheKey(workspaceId, 'notifications', 'inbox', limit)
+    )
+    const cached = get().linearNotificationCache[cacheKey]
+    if (!options?.force && isFresh(cached, NOTIFICATION_CACHE_TTL)) {
+      return cached.data ?? emptyLinearCollection<LinearNotification>()
+    }
+
+    const inflight = inflightNotificationRequests.get(cacheKey)
+    if (
+      inflight &&
+      inflight.contextKey === contextKey &&
+      inflight.mutationGeneration === linearMutationGeneration &&
+      (!options?.force || inflight.force)
+    ) {
+      return inflight.promise
+    }
+
+    let entry: InflightLinearCollectionRequest<LinearNotification>
+    const requestCacheGeneration = linearCacheGeneration
+    const requestMutationGeneration = linearMutationGeneration
+    const promise = linearNotifications(scope.settings, limit, workspaceId)
+      .then((result) => {
+        if (
+          inflightNotificationRequests.get(cacheKey) === entry &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          )
+        ) {
+          set((s) => ({
+            linearNotificationCache: evictStaleEntries({
+              ...s.linearNotificationCache,
+              [cacheKey]: { data: result, fetchedAt: Date.now() }
+            })
+          }))
+        }
+        return result
+      })
+      .catch((error) => {
+        console.warn('[linear] listLinearNotifications failed:', error)
+        if (
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+          canWriteLinearReadResult(
+            contextKey,
+            requestCacheGeneration,
+            requestMutationGeneration,
+            get().settings,
+            scope.explicitSource
+          ) &&
+          !shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)
+        ) {
+          void get().checkLinearConnection(true)
+        }
+        return (
+          get().linearNotificationCache[cacheKey]?.data ??
+          emptyLinearCollection<LinearNotification>()
+        )
+      })
+      .finally(() => {
+        if (inflightNotificationRequests.get(cacheKey) === entry) {
+          inflightNotificationRequests.delete(cacheKey)
+        }
+      })
+
+    entry = {
+      promise,
+      force: Boolean(options?.force),
+      generation: requestCacheGeneration,
+      contextKey,
+      mutationGeneration: requestMutationGeneration
+    }
+    inflightNotificationRequests.set(cacheKey, entry)
+    return promise
+  },
+
+  markLinearNotificationRead: async (id, workspaceId, options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    // Why: optimistic read-state so the unread dot clears on click; a failed
+    // write invalidates the cache so the next fetch restores the truth.
+    set((s) => {
+      const next = { ...s.linearNotificationCache }
+      let changed = false
+      for (const [key, cacheEntry] of Object.entries(next)) {
+        const items = cacheEntry?.data?.items
+        if (!items?.some((n) => n.id === id && !n.readAt)) {
+          continue
+        }
+        next[key] = {
+          ...cacheEntry,
+          data: {
+            ...cacheEntry.data,
+            items: items.map((n) =>
+              n.id === id && !n.readAt ? { ...n, readAt: new Date().toISOString() } : n
+            )
+          }
+        }
+        changed = true
+      }
+      return changed ? { linearNotificationCache: next } : {}
+    })
+    const ok = await linearNotificationMarkRead(scope.settings, id, workspaceId)
+    if (!ok) {
+      set((s) => {
+        const next: typeof s.linearNotificationCache = {}
+        for (const [key, cacheEntry] of Object.entries(s.linearNotificationCache)) {
+          next[key] = { ...cacheEntry, fetchedAt: 0 }
+        }
+        return { linearNotificationCache: next }
+      })
+    }
+    return ok
+  },
+
+  markAllLinearNotificationsRead: async (options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+    set((s) => {
+      const readAt = new Date().toISOString()
+      const next: typeof s.linearNotificationCache = {}
+      for (const [key, cacheEntry] of Object.entries(s.linearNotificationCache)) {
+        next[key] = cacheEntry?.data
+          ? {
+              ...cacheEntry,
+              data: {
+                ...cacheEntry.data,
+                items: cacheEntry.data.items.map((n) => (n.readAt ? n : { ...n, readAt }))
+              }
+            }
+          : cacheEntry
+      }
+      return { linearNotificationCache: next }
+    })
+    const ok = await linearNotificationMarkAllRead(scope.settings, workspaceId)
+    if (!ok) {
+      set((s) => {
+        const next: typeof s.linearNotificationCache = {}
+        for (const [key, cacheEntry] of Object.entries(s.linearNotificationCache)) {
+          next[key] = { ...cacheEntry, fetchedAt: 0 }
+        }
+        return { linearNotificationCache: next }
+      })
+    }
+    return ok
   }
 })

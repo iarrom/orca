@@ -82,7 +82,8 @@ describe('feature interaction writer boundaries', () => {
     for (const section of sections) {
       expect(section).toContain('sourceContext')
     }
-    const rowRenderStart = source.indexOf('filteredWorkItems.map((item) => {')
+    // [FORK] Linear-parity Tasks page: rows render inside status groups.
+    const rowRenderStart = source.indexOf('groupItems.map((item) => {')
     expect(rowRenderStart).toBeGreaterThanOrEqual(0)
     expect(source.slice(rowRenderStart, rowRenderStart + 12_000)).toContain(
       'sourceContext={getTaskPageRepoSourceContext(itemRepo,'
@@ -138,7 +139,8 @@ describe('feature interaction writer boundaries', () => {
     expect(
       sourceBetween(
         taskPageSource,
-        '{displayedGitLabItems.map((item) => (',
+        // [FORK] Linear-parity Tasks page: rows render inside status groups.
+        '{groupedGitLabItems.flatMap(({ group, items: groupItems }) => [',
         '<GitLabItemDialog'
       ).match(/recordFeatureInteraction\('gitlab-tasks'\)/g)
     ).toHaveLength(2)

@@ -45,4 +45,51 @@ describe('mapLinearIssue', () => {
       project: undefined
     })
   })
+
+  it('maps cycle and createdAt when the relations resolve', async () => {
+    const issue = {
+      id: 'issue-2',
+      identifier: 'LIN-3',
+      title: 'Cycle-scoped issue',
+      url: 'https://linear.app/acme/issue/LIN-3',
+      estimate: null,
+      priority: 2,
+      updatedAt: new Date('2026-02-01T00:00:00.000Z'),
+      createdAt: new Date('2026-01-15T00:00:00.000Z'),
+      state: Promise.resolve({ name: 'Todo', type: 'unstarted', color: '#888' }),
+      team: Promise.resolve({ id: 'team-1', name: 'Dev', key: 'DEV' }),
+      assignee: Promise.resolve(undefined),
+      cycle: Promise.resolve({ id: 'cycle-1', name: undefined, number: 69 }),
+      labels: async () => ({ nodes: [] })
+    }
+
+    await expect(mapLinearIssue(issue as never)).resolves.toMatchObject({
+      id: 'issue-2',
+      createdAt: '2026-01-15T00:00:00.000Z',
+      cycle: { id: 'cycle-1', number: 69 }
+    })
+  })
+
+  it('omits cycle when the relation fails', async () => {
+    const issue = {
+      id: 'issue-3',
+      identifier: 'LIN-4',
+      title: 'No cycle',
+      url: 'https://linear.app/acme/issue/LIN-4',
+      estimate: null,
+      priority: 0,
+      updatedAt: new Date('2026-02-01T00:00:00.000Z'),
+      state: Promise.resolve({ name: 'Todo', type: 'unstarted', color: '#888' }),
+      team: Promise.resolve({ id: 'team-1', name: 'Dev', key: 'DEV' }),
+      assignee: Promise.resolve(undefined),
+      cycle: Promise.reject(new Error('cycle fetch failed')),
+      labels: async () => ({ nodes: [] })
+    }
+
+    await expect(mapLinearIssue(issue as never)).resolves.toMatchObject({
+      id: 'issue-3',
+      cycle: undefined,
+      createdAt: undefined
+    })
+  })
 })

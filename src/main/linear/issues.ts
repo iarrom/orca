@@ -34,7 +34,13 @@ type LinearIssueNode = {
   estimate?: number | null
   priority: number
   updatedAt: string
+  createdAt?: string | null
   labelIds?: string[] | null
+  cycle?: {
+    id: string
+    name?: string | null
+    number?: number | null
+  } | null
   state?: {
     name?: string | null
     type?: string | null
@@ -139,7 +145,13 @@ const LINEAR_ISSUE_NODE_FIELDS = `
   priority
   estimate
   updatedAt
+  createdAt
   labelIds
+  cycle {
+    id
+    name
+    number
+  }
   state {
     name
     type
@@ -378,6 +390,14 @@ function mapRawIssueForWorkspace(
     priority: issue.priority,
     dueDate: issue.dueDate ?? null,
     updatedAt: issue.updatedAt,
+    createdAt: issue.createdAt ?? undefined,
+    cycle: issue.cycle
+      ? {
+          id: issue.cycle.id,
+          name: issue.cycle.name ?? undefined,
+          number: issue.cycle.number ?? undefined
+        }
+      : undefined,
     workspaceId: entry.workspace.id,
     workspaceName: entry.workspace.organizationName
   }

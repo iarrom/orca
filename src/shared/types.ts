@@ -1596,6 +1596,16 @@ export type LinearIssue = {
   priority: number
   dueDate?: string | null
   updatedAt: string
+  /** [FORK] Present when the list mapper fetches cycle/createdAt (Linear-parity
+   *  Tasks page: cycle chips, cycle grouping, created-date ordering). */
+  cycle?: LinearIssueCycleSummary
+  createdAt?: string
+}
+
+export type LinearIssueCycleSummary = {
+  id: string
+  name?: string
+  number?: number
 }
 
 export type LinearProjectSummary = {
@@ -1943,6 +1953,32 @@ export type LinearTeam = {
   name: string
   key: string
   url?: string
+}
+
+/** [FORK] Linear inbox notification (Linear-parity Tasks page). Only
+ *  issue-scoped notifications are surfaced; other notification types are
+ *  filtered out at the main-process boundary. */
+export type LinearNotification = {
+  id: string
+  workspaceId?: string
+  workspaceName?: string
+  /** Linear notification type, e.g. `issueAssignedToYou`, `issueMention`. */
+  type: string
+  createdAt: string
+  readAt?: string | null
+  snoozedUntilAt?: string | null
+  actor?: {
+    id: string
+    displayName: string
+    avatarUrl?: string
+  }
+  issue?: {
+    id: string
+    identifier: string
+    title: string
+    url?: string
+    teamKey?: string
+  }
 }
 
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────
@@ -3117,6 +3153,105 @@ export type StatusBarItem =
   | 'ports'
 export type FloatingTerminalTriggerLocation = 'floating-button' | 'status-bar'
 
+// ─── [FORK] Linear-parity Tasks page: saved views + sidebar state ─────────
+// Persisted via PersistedUIState (ui:set round-trip). Saved views are
+// Orca-local: Linear's API does not expose custom-view predicates, so remote
+// views stay read-only lists while these capture the user's configured view.
+
+export type TaskViewGroupBy =
+  | 'none'
+  | 'status'
+  | 'assignee'
+  | 'priority'
+  | 'team'
+  | 'project'
+  | 'cycle'
+export type TaskViewOrderBy = 'priority' | 'updated' | 'created' | 'dueDate' | 'identifier'
+export type TaskViewMode = 'list' | 'board'
+export type TaskViewDueDateFilter = 'overdue' | 'week' | 'month' | 'nodate'
+
+/** Client-side filters applied to the fetched task list. State is matched by
+ *  name/type (not id) because `LinearIssue.state` carries no id, and labels by
+ *  name so cross-team labels behave like Linear's own filtering. */
+export type TaskViewFilters = {
+  stateTypes?: string[]
+  stateNames?: string[]
+  assigneeIds?: string[]
+  labels?: string[]
+  priorities?: number[]
+  projectIds?: string[]
+  teamIds?: string[]
+  dueDate?: TaskViewDueDateFilter
+}
+
+export type TaskSavedViewScope = {
+  workspaceId?: string
+  teamIds?: string[]
+  repoIds?: string[]
+  siteId?: string
+}
+
+export type TaskSavedViewConfig = {
+  search?: string
+  filters?: TaskViewFilters
+  groupBy?: TaskViewGroupBy
+  orderBy?: TaskViewOrderBy
+  viewMode?: TaskViewMode
+  /** Display-property ids; unknown ids are dropped on read so persisted
+   *  configs survive renderer catalogs evolving. */
+  displayProperties?: string[]
+  showEmptyGroups?: boolean
+  showSubIssues?: boolean
+}
+
+export type TaskSavedView = {
+  id: string
+  name: string
+  provider: TaskProvider
+  scope?: TaskSavedViewScope
+  config: TaskSavedViewConfig
+  favorite?: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+/** Which node of the in-page Tasks sidebar is active. */
+export type TasksNavSelection =
+  | { kind: 'inbox' }
+  | { kind: 'my-issues' }
+  | { kind: 'all-issues'; teamId?: string }
+  | { kind: 'projects-index'; teamId?: string }
+  | { kind: 'views-index'; teamId?: string }
+  | { kind: 'project'; projectId: string; workspaceId: LinearConcreteWorkspaceId }
+  | {
+      kind: 'remote-view'
+      viewId: string
+      model: LinearCustomViewModel
+      workspaceId: LinearConcreteWorkspaceId
+    }
+  | { kind: 'saved-view'; savedViewId: string }
+
+export type TaskSidebarFavorite =
+  | { kind: 'saved-view'; savedViewId: string }
+  | { kind: 'project'; projectId: string; workspaceId: LinearConcreteWorkspaceId; name?: string }
+  | {
+      kind: 'remote-view'
+      viewId: string
+      model: LinearCustomViewModel
+      workspaceId: LinearConcreteWorkspaceId
+      name?: string
+    }
+  | { kind: 'team'; teamId: string; name?: string }
+
+export type TaskSidebarState = {
+  collapsed?: boolean
+  /** Collapsed sidebar section ids (e.g. 'workspace', 'favorites', team ids). */
+  collapsedSections?: string[]
+  favorites?: TaskSidebarFavorite[]
+  /** Collapsed list group keys, scoped by nav selection serialization. */
+  collapsedTaskGroups?: string[]
+}
+
 export type TaskResumeState = {
   githubMode?: 'items' | 'project'
   githubItemsPreset?: TaskViewPresetId | null
@@ -3133,6 +3268,8 @@ export type TaskResumeState = {
   }
   jiraPreset?: 'assigned' | 'reported' | 'all' | 'done'
   jiraQuery?: string
+  /** [FORK] Active Tasks sidebar nav selection (Linear-parity Tasks page). */
+  tasksNav?: TasksNavSelection
 }
 
 export type RightSidebarTab =
@@ -3366,6 +3503,10 @@ export type PersistedUIState = {
    *  using their existing settings paths; this only restores transient tabs
    *  and applied searches. */
   taskResumeState?: TaskResumeState
+  /** [FORK] Orca-local saved task views (Linear-parity Tasks page). */
+  taskSavedViews?: TaskSavedView[]
+  /** [FORK] Tasks in-page sidebar state: collapse, favorites, group folds. */
+  taskSidebarState?: TaskSidebarState
   workspaceCleanup?: WorkspaceCleanupUIState
   /** Feature tips already surfaced to the user. Startup only opens the tips
    *  modal when this list is missing one of the current tip ids. */

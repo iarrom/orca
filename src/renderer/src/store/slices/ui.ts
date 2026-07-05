@@ -17,6 +17,8 @@ import type {
   StatusBarItem,
   TaskProvider,
   TaskResumeState,
+  TaskSavedView,
+  TaskSidebarState,
   TaskViewPresetId,
   TuiAgent,
   UpdateStatus,
@@ -32,6 +34,9 @@ import type {
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { sanitizeTasksNavSelection } from '@/components/tasks/tasks-nav-state'
+import { normalizeTaskSavedViews } from '@/components/tasks/task-saved-views'
+import { normalizeTaskSidebarState } from '@/components/tasks/task-sidebar-state'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
@@ -522,6 +527,11 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   if (typeof input.jiraQuery === 'string') {
     next.jiraQuery = input.jiraQuery
   }
+  // [FORK] Linear-parity Tasks page sidebar nav resume.
+  const tasksNav = sanitizeTasksNavSelection(input.tasksNav)
+  if (tasksNav) {
+    next.tasksNav = tasksNav
+  }
 
   return Object.keys(next).length > 0 ? next : undefined
 }
@@ -628,6 +638,12 @@ export type UISlice = {
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
+  /** [FORK] Orca-local saved task views (Linear-parity Tasks page). */
+  taskSavedViews: TaskSavedView[]
+  setTaskSavedViews: (views: TaskSavedView[]) => void
+  /** [FORK] Tasks in-page sidebar state: collapse, favorites, group folds. */
+  taskSidebarState: TaskSidebarState
+  updateTaskSidebarState: (updates: Partial<TaskSidebarState>) => void
   githubTaskDrawerWorkItem: GitHubWorkItem | null
   setGithubTaskDrawerWorkItem: (item: GitHubWorkItem | null) => void
   newWorkspaceDraft: {
@@ -1141,6 +1157,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
+  taskSavedViews: [],
+  taskSidebarState: {},
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}, options = {}) => {
@@ -1308,6 +1326,18 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const next = { ...s.taskResumeState, ...updates }
       window.api.ui.set({ taskResumeState: next }).catch(console.error)
       return { taskResumeState: next }
+    }),
+  // [FORK] Linear-parity Tasks page: saved views + sidebar state persistence.
+  setTaskSavedViews: (views) =>
+    set(() => {
+      window.api.ui.set({ taskSavedViews: views }).catch(console.error)
+      return { taskSavedViews: views }
+    }),
+  updateTaskSidebarState: (updates) =>
+    set((s) => {
+      const next = { ...s.taskSidebarState, ...updates }
+      window.api.ui.set({ taskSidebarState: next }).catch(console.error)
+      return { taskSidebarState: next }
     }),
   setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
   closeTaskPage: () =>
@@ -2319,6 +2349,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
+        // [FORK] Linear-parity Tasks page: saved views + sidebar state.
+        taskSavedViews: normalizeTaskSavedViews(ui.taskSavedViews),
+        taskSidebarState: normalizeTaskSidebarState(ui.taskSidebarState),
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
         featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
         contextualToursSeenIds: normalizeContextualTourIds(ui.contextualToursSeenIds),

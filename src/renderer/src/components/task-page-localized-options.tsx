@@ -5,7 +5,12 @@ import { JiraIcon } from '@/components/icons/JiraIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { getTaskPresetQuery } from '@/lib/new-workspace'
-import type { TaskProvider, TaskViewPresetId } from '../../../shared/types'
+import type {
+  TaskProvider,
+  TaskViewGroupBy,
+  TaskViewOrderBy,
+  TaskViewPresetId
+} from '../../../shared/types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
@@ -32,8 +37,10 @@ export type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
 
 export type LinearViewMode = 'list' | 'board'
 export type LinearMode = 'issues' | 'projects' | 'views'
-export type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
-export type LinearOrderBy = 'priority' | 'updated' | 'identifier'
+// [FORK] Linear-parity Tasks page: group/order options align with the
+// persisted TaskViewGroupBy/TaskViewOrderBy unions in shared/types.
+export type LinearGroupBy = TaskViewGroupBy
+export type LinearOrderBy = TaskViewOrderBy
 export type LinearDisplayProperty =
   | 'state'
   | 'priority'
@@ -41,6 +48,10 @@ export type LinearDisplayProperty =
   | 'team'
   | 'labels'
   | 'updated'
+  | 'project'
+  | 'cycle'
+  | 'dueDate'
+  | 'estimate'
 
 export function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -169,7 +180,9 @@ export const getLinearGroupOptions = createLocalizedCatalog(
     { id: 'status', label: translate('auto.components.TaskPage.154b0fa623', 'Status') },
     { id: 'assignee', label: translate('auto.components.TaskPage.d2a876ca53', 'Assignee') },
     { id: 'priority', label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
-    { id: 'team', label: translate('auto.components.TaskPage.a98cbe7664', 'Team') }
+    { id: 'team', label: translate('auto.components.TaskPage.a98cbe7664', 'Team') },
+    { id: 'project', label: translate('auto.components.TaskPage.4a1d0148c0', 'Project') },
+    { id: 'cycle', label: translate('auto.components.tasks.options.cycle', 'Cycle') }
   ]
 )
 
@@ -177,6 +190,8 @@ export const getLinearOrderOptions = createLocalizedCatalog(
   (): { id: LinearOrderBy; label: string }[] => [
     { id: 'priority', label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
     { id: 'updated', label: translate('auto.components.TaskPage.f362667d55', 'Updated') },
+    { id: 'created', label: translate('auto.components.tasks.options.created', 'Created') },
+    { id: 'dueDate', label: translate('auto.components.tasks.options.dueDate', 'Due date') },
     { id: 'identifier', label: translate('auto.components.TaskPage.d8a517ad89', 'Identifier') }
   ]
 )
@@ -188,7 +203,11 @@ export const getLinearDisplayProperties = createLocalizedCatalog(
     { id: 'assignee', label: translate('auto.components.TaskPage.d2a876ca53', 'Assignee') },
     { id: 'team', label: translate('auto.components.TaskPage.a98cbe7664', 'Team') },
     { id: 'labels', label: translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels') },
-    { id: 'updated', label: translate('auto.components.TaskPage.f362667d55', 'Updated') }
+    { id: 'updated', label: translate('auto.components.TaskPage.f362667d55', 'Updated') },
+    { id: 'project', label: translate('auto.components.TaskPage.4a1d0148c0', 'Project') },
+    { id: 'cycle', label: translate('auto.components.tasks.options.cycle', 'Cycle') },
+    { id: 'dueDate', label: translate('auto.components.tasks.options.dueDate', 'Due date') },
+    { id: 'estimate', label: translate('auto.components.tasks.options.estimate', 'Estimate') }
   ]
 )
 

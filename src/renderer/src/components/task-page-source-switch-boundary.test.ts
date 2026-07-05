@@ -35,15 +35,17 @@ describe('TaskPage source switching host boundary', () => {
   })
 
   it('switches task source without mutating the focused run host', () => {
+    // [FORK] Linear-parity Tasks page: the switcher moved into the in-page
+    // sidebar; the boundary under test is its shared click handler.
     const section = sourceBetween(
       TASK_PAGE_SOURCE,
-      '{visibleSourceOptions.map((source) => {',
-      "{taskSource === 'linear' && linearConnected ?"
+      'const handleSelectTaskSourceFromSidebar = useCallback(',
+      'const openNewLinearIssueDialog = useCallback('
     )
 
     expect(section).toContain('openTaskPage(')
-    expect(section).toContain('taskSource: source.id')
-    expect(section).toContain('defaultTaskSource: source.id')
+    expect(section).toContain('taskSource: source')
+    expect(section).toContain('defaultTaskSource: source')
     expect(section).not.toContain('activeRuntimeEnvironmentId')
     expect(section).not.toContain('projectHostSetupId')
     expect(section).not.toContain('workspaceRunContext')
