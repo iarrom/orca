@@ -12,6 +12,11 @@ import {
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
+// [FORK] Панель агент-сессий: managed-табы скрыты из таб-групп, а выбранная
+// в панели сессия (режим 'terminal') портируется в тело панели.
+import { isAgentPanelManagedTab } from '../agent-panel/agent-panel-managed-tab'
+import { useAgentPanelState } from '../agent-panel/agent-panel-state'
+// [/FORK]
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -56,6 +61,8 @@ type TerminalOverlaySlotProps = {
   isVisible: boolean
   isActive: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
+  // [FORK] DOM-цель панели агентов; ненулевая — пейн рендерится порталом в неё.
+  agentPanelPortalTarget: HTMLElement | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   closeTab: (tabId: string) => void
@@ -73,6 +80,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   isVisible,
   isActive,
   activityTerminalPortal,
+  agentPanelPortalTarget,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
   closeTab,
@@ -258,6 +266,17 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     )
   }
 
+  // [FORK] Панельная сессия: живой пейн рендерится прямо в тело панели
+  // агентов (та же портальная механика, что у activity — без ремоунта xterm).
+  if (agentPanelPortalTarget) {
+    return createPortal(
+      terminalPane,
+      agentPanelPortalTarget,
+      `agent-panel-terminal-${terminalTabId}`
+    )
+  }
+  // [/FORK]
+
   return (
     <div
       ref={overlayRef}
@@ -298,6 +317,13 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   const closeTab = useAppStore((state) => state.closeTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
+  // [FORK] Хост панельного терминала: таб, чей пейн панель агентов сейчас
+  // показывает в режиме 'terminal' (публикуется AgentChatColumn).
+  const agentPanelHostTabId = useAgentPanelState(
+    (state) => state.panelTerminalHostTabIdByWorktree[worktreeId] ?? null
+  )
+  const agentPanelBodyElement = useAgentPanelState((state) => state.panelTerminalBodyElement)
+  // [/FORK]
 
   useNativeChatToggleShortcut(worktreeId, isWorktreeActive)
 
@@ -354,8 +380,23 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     <>
       {terminalTabs.map((terminalTab) => {
         const assignment = assignments.get(terminalTab.id)
-        const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-        const isActive = Boolean(isVisible && assignment && assignment.groupId === activeGroupId)
+        // [FORK] Managed-агент-табы не показываются поверх таб-групп — их
+        // контент живёт в панели агентов. Выбранная там сессия (режим
+        // 'terminal') портируется в тело панели и считается активной.
+        const isPanelManaged = isAgentPanelManagedTab(terminalTab)
+        const isPanelHosted = Boolean(
+          isPanelManaged &&
+          isWorktreeActive &&
+          terminalTab.id === agentPanelHostTabId &&
+          agentPanelBodyElement
+        )
+        const isVisible =
+          Boolean(
+            isWorktreeActive && assignment && assignment.isActiveInGroup && !isPanelManaged
+          ) || isPanelHosted
+        const isActive =
+          Boolean(isVisible && assignment && assignment.groupId === activeGroupId) || isPanelHosted
+        // [/FORK]
         const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
           worktreeId,
           tabId: terminalTab.id
@@ -373,6 +414,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isVisible={isVisible}
             isActive={isActive}
             activityTerminalPortal={activityTerminalPortal}
+            agentPanelPortalTarget={isPanelHosted ? agentPanelBodyElement : null}
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}
             closeTab={closeTab}

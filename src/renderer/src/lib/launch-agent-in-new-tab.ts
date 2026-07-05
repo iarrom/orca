@@ -28,6 +28,11 @@ import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
+// [FORK] Панель агент-сессий: новый агент не перехватывает центр — таб
+// создаётся без активации в группе, а сессия выбирается в панели.
+import { AGENT_PANEL_ENABLED } from '@/components/agent-panel/agent-panel-managed-tab'
+import { useAgentPanelState } from '@/components/agent-panel/agent-panel-state'
+// [/FORK]
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -271,7 +276,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...initialAgentTabViewModeProps(store.settings)
+    // [FORK] Панельная сессия: таб скрыт из таб-бара, поэтому не активируем
+    // его в группе (центр остаётся на прежнем табе) и держим viewMode
+    // 'terminal' — чат рендерит панель, а не TerminalPane-оверлей.
+    ...(AGENT_PANEL_ENABLED ? { activate: false } : initialAgentTabViewModeProps(store.settings))
+    // [/FORK]
   })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
@@ -355,7 +364,14 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // Why: match the `+` button's `createNewTerminalTab` sequence — without
   // `setActiveTabType('terminal')`, a worktree currently showing an editor
   // file keeps rendering the editor and the new terminal tab stays invisible.
-  store.setActiveTabType('terminal')
+  // [FORK] Панельная сессия живёт в панели, центр не трогаем; вместо этого
+  // выбираем новую сессию в панели (синтетический ключ до первого hook).
+  if (AGENT_PANEL_ENABLED) {
+    useAgentPanelState.getState().selectSession(worktreeId, `${tab.id}:`)
+  } else {
+    store.setActiveTabType('terminal')
+  }
+  // [/FORK]
 
   // Why: persist the tab-bar order with the new terminal appended. Without
   // this, `reconcileTabOrder` falls back to terminals-first when the stored

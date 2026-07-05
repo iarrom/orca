@@ -21,6 +21,11 @@ import {
   isPassiveCompletedHibernationEvidence,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
+// [FORK] Панель агент-сессий: возобновлённая сессия выбирается в панели,
+// не перехватывая центр.
+import { AGENT_PANEL_ENABLED } from '@/components/agent-panel/agent-panel-managed-tab'
+import { useAgentPanelState } from '@/components/agent-panel/agent-panel-state'
+// [/FORK]
 
 function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
   const state = useAppStore.getState()
@@ -86,7 +91,10 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
   }
 
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
-    launchAgent: record.agent
+    launchAgent: record.agent,
+    // [FORK] Панельная сессия: таб скрыт из таб-бара, группу не переключаем.
+    ...(AGENT_PANEL_ENABLED ? { activate: false } : {})
+    // [/FORK]
   })
   state.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
@@ -110,7 +118,13 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     providerSession: record.providerSession
   })
   state.clearSleepingAgentSession(record.paneKey)
-  state.setActiveTabType('terminal')
+  // [FORK] Возобновлённая сессия живёт в панели агентов — выбираем её там.
+  if (AGENT_PANEL_ENABLED) {
+    useAgentPanelState.getState().selectSession(record.worktreeId, `${tab.id}:`)
+  } else {
+    state.setActiveTabType('terminal')
+  }
+  // [/FORK]
   appendTabToWorktreeOrder(record.worktreeId, tab.id)
   return true
 }

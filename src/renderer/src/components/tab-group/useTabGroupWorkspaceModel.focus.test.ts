@@ -41,7 +41,10 @@ vi.mock('react', async () => {
   return {
     ...actual,
     useCallback: <T>(callback: T) => callback,
-    useMemo: <T>(factory: () => T) => factory()
+    useMemo: <T>(factory: () => T) => factory(),
+    // [FORK] Хук получил конвергирующий useEffect (managed-агент-табы панели);
+    // в этом безрендерном харнесе эффекты не выполняются.
+    useEffect: () => {}
   }
 })
 

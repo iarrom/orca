@@ -24,6 +24,9 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeCardAgents from './WorktreeCardAgents'
+// [FORK] Сворачиваемая обёртка секции агентов (панель агент-сессий).
+import SidebarWorktreeAgentsSection from './SidebarWorktreeAgentsSection'
+// [/FORK]
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { cn } from '@/lib/utils'
@@ -1740,11 +1743,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
              follow the title, counterbalance the card stack gap so both rows
              read as one compact header group. */}
         {showInlineAgentList && (
-          <WorktreeCardAgents
+          // [FORK] Сворачиваемая секция «Агенты · N» вокруг инлайн-списка.
+          <SidebarWorktreeAgentsSection
             worktreeId={worktree.id}
-            agents={agentActivityDisplayMode === 'compact' ? compactInlineAgentRows : undefined}
             className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
-          />
+          >
+            <WorktreeCardAgents
+              worktreeId={worktree.id}
+              agents={agentActivityDisplayMode === 'compact' ? compactInlineAgentRows : undefined}
+            />
+          </SidebarWorktreeAgentsSection>
+          // [/FORK]
         )}
 
         {showLineageChildChip && (

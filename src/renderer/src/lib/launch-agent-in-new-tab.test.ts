@@ -148,7 +148,10 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      launchAgent: 'codex'
+      launchAgent: 'codex',
+      quickCommandLabel: undefined,
+      // [FORK] Панельная сессия не активируется в группе (живёт в панели).
+      activate: false
     })
   })
 
@@ -163,7 +166,9 @@ describe('launchAgentInNewTab', () => {
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'codex',
-      quickCommandLabel: 'Review'
+      quickCommandLabel: 'Review',
+      // [FORK] Панельная сессия не активируется в группе (живёт в панели).
+      activate: false
     })
   })
 

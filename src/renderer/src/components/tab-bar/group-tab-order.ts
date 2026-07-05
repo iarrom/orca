@@ -1,6 +1,10 @@
 import type { Tab, TabGroup } from '../../../../shared/types'
 import type { AppState } from '../../store/types'
 import { reconcileTabOrder } from './reconcile-order'
+// [FORK] Панельные агент-сессии скрыты из таб-бара, поэтому клавиатурная
+// навигация и MRU-переключатель тоже не должны на них попадать.
+import { isAgentPanelManagedTab } from '../agent-panel/agent-panel-managed-tab'
+// [/FORK]
 
 export type VisibleTabRef = {
   type: 'terminal' | 'editor' | 'browser' | 'simulator'
@@ -127,7 +131,13 @@ export function getActiveTabNavOrder(
   worktreeId: string,
   ids: ActiveTabNavOrderIds = {}
 ): VisibleTabRef[] {
-  const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
+  const terminalIds =
+    ids.terminalIds ??
+    (state.tabsByWorktree[worktreeId] ?? [])
+      // [FORK] см. импорт: панельные сессии выпадают из цикла навигации.
+      .filter((t) => !isAgentPanelManagedTab(t))
+      // [/FORK]
+      .map((t) => t.id)
   const editorIds =
     ids.editorIds ?? state.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
   const browserIds =

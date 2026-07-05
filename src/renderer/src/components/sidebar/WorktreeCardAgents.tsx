@@ -23,6 +23,11 @@ import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-linea
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { translate } from '@/i18n/i18n'
+// [FORK] Панель агент-сессий: клик по managed-строке выбирает сессию в панели
+// вместо активации скрытого таба в группе.
+import { isAgentPanelManagedTab } from '@/components/agent-panel/agent-panel-managed-tab'
+import { useAgentPanelState } from '@/components/agent-panel/agent-panel-state'
+// [/FORK]
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -202,7 +207,15 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       // back/forward history for clicks from inline agent rows.
       activateAndRevealWorktree(worktreeId)
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
-      if (tabs.some((t) => t.id === tabId)) {
+      const clickedTab = tabs.find((t) => t.id === tabId)
+      if (clickedTab) {
+        // [FORK] Панельная сессия: таб скрыт из таб-бара, активировать его в
+        // группе нельзя — выбираем сессию в панели агентов.
+        if (isAgentPanelManagedTab(clickedTab)) {
+          useAgentPanelState.getState().selectSession(worktreeId, paneKey)
+          return
+        }
+        // [/FORK]
         activateTabAndFocusPane(tabId, parsed.leafId, {
           ackPaneKeyOnSuccess: paneKey,
           flashFocusedPane: true,

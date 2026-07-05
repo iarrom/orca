@@ -1,87 +1,33 @@
-// [FORK] Постоянный бар-чат активного агента (Cursor-раскладка: левый сайдбар →
-// чат → вкладки). Самостоятельная обёртка над NativeChatView: резолвит агента
-// активного воркспейса из стора (без pane-manager), даёт ресайз ширины и режим
-// «развернуть на весь центр».
-import { Maximize2, Minimize2 } from 'lucide-react'
-import { useCallback, useMemo } from 'react'
+// [FORK] Панель агент-сессий (Cursor-раскладка: левый сайдбар → панель →
+// вкладки). Полоса сессий-табов активного worktree + тело: native-чат для
+// поддерживаемых агентов, живой терминал (портал из TerminalPaneOverlayLayer)
+// для остальных. Выбор сессии живёт в fork-сторе agent-panel-state.
+import { Maximize2, MessageSquare, Minimize2, SquareTerminal } from 'lucide-react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { TuiAgent } from '../../../../shared/types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '../../store'
+import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { orderTabLaunchAgents } from '@/components/tab-bar/tab-agent-launch-options'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
+import { AgentSessionTabStrip } from '@/components/agent-panel/AgentSessionTabStrip'
+import {
+  defaultAgentPanelSessionView,
+  isAgentPanelManagedTab
+} from '@/components/agent-panel/agent-panel-managed-tab'
+import {
+  buildAgentPanelSessions,
+  resolveAgentPanelPtyId,
+  resolveAgentPanelTargetSession
+} from '@/components/agent-panel/agent-panel-session-model'
+import { useAgentPanelState } from '@/components/agent-panel/agent-panel-state'
+import { isNativeChatSupportedAgent } from './native-chat-availability'
 import { useAgentChatColumnState } from './agent-chat-column-state'
-import { findTabAgentEntry } from './native-chat-tab-agent-entry'
 import NativeChatView from './NativeChatView'
 
-type ResolvedAgentTarget = {
-  terminalTabId: string
-  paneKey: string
-  launchAgent: TuiAgent | null
-  targetPtyId: string | null
-}
-
-/** Resolve the active worktree's agent chat target purely from store state —
- *  the live pane manager (which TerminalPane uses) isn't available here. */
-function useActiveAgentTarget(): ResolvedAgentTarget | null {
-  const snapshot = useAppStore(
-    useShallow((s) => ({
-      worktreeId: s.activeWorktreeId,
-      activeTabId: s.activeWorktreeId ? s.activeTabIdByWorktree[s.activeWorktreeId] : null,
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      tabsByWorktree: s.tabsByWorktree,
-      ptyIdsByTabId: s.ptyIdsByTabId,
-      terminalLayoutsByTabId: s.terminalLayoutsByTabId
-    }))
-  )
-
-  return useMemo(() => {
-    const { worktreeId } = snapshot
-    if (!worktreeId) {
-      return null
-    }
-
-    // Prefer the active tab's agent; fall back to any agent attributed to this
-    // worktree (survives before the tab is mounted / focused).
-    const entry =
-      (snapshot.activeTabId
-        ? findTabAgentEntry(snapshot.agentStatusByPaneKey, snapshot.activeTabId)
-        : null) ??
-      Object.values(snapshot.agentStatusByPaneKey).find((e) => e.worktreeId === worktreeId) ??
-      null
-    const parsed = entry ? parsePaneKey(entry.paneKey) : null
-    if (entry && parsed) {
-      const { tabId, leafId } = parsed
-      const launchAgent =
-        snapshot.tabsByWorktree[worktreeId]?.find((t) => t.id === tabId)?.launchAgent ?? null
-      // Replicate getPtyIdForPaneKey: prefer the leaf-bound pty, else the tab's
-      // first live pty. Needed for sends.
-      const tabPtyIds = snapshot.ptyIdsByTabId[tabId] ?? []
-      const leafPty = snapshot.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
-      const targetPtyId = leafPty && tabPtyIds.includes(leafPty) ? leafPty : (tabPtyIds[0] ?? null)
-      return { terminalTabId: tabId, paneKey: entry.paneKey, launchAgent, targetPtyId }
-    }
-
-    // [FORK] Just-launched agent: no status entry yet, but the active tab carries
-    // launchAgent — resolve its chat immediately so the column picks it up.
-    const { activeTabId } = snapshot
-    if (activeTabId) {
-      const tab = snapshot.tabsByWorktree[worktreeId]?.find((t) => t.id === activeTabId)
-      if (tab?.launchAgent) {
-        const tabPtyIds = snapshot.ptyIdsByTabId[activeTabId] ?? []
-        return {
-          terminalTabId: activeTabId,
-          paneKey: `${activeTabId}:`,
-          launchAgent: tab.launchAgent,
-          targetPtyId: tab.ptyId ?? tabPtyIds[0] ?? null
-        }
-      }
-    }
-    return null
-  }, [snapshot])
-}
+const EMPTY_TERMINAL_TABS: readonly never[] = []
 
 /** Drag handle on the column's right edge. Dragging right widens the chat. */
 function ChatColumnResizeHandle(): React.JSX.Element {
@@ -112,7 +58,7 @@ function ChatColumnResizeHandle(): React.JSX.Element {
 }
 
 /** Empty-state launcher: offers the same agents as the tab-bar "+" menu, so a
- *  new agent can be started straight from the chat bar (Cursor parity). */
+ *  new agent can be started straight from the panel (Cursor parity). */
 function AgentChatLaunchChoices({ worktreeId }: { worktreeId: string }): React.JSX.Element {
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const { detectedIds } = useDetectedAgents(null) // local detection
@@ -132,12 +78,7 @@ function AgentChatLaunchChoices({ worktreeId }: { worktreeId: string }): React.J
               key={agent}
               type="button"
               onClick={() => {
-                const result = launchAgentInNewTab({ agent, worktreeId })
-                // [FORK] Чат живёт в колонке → таб агента в центре открываем
-                // терминалом, чтобы не дублировать чат.
-                if (result?.tabId) {
-                  useAppStore.getState().setTabViewMode(result.tabId, 'terminal')
-                }
+                launchAgentInNewTab({ agent, worktreeId })
               }}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-accent"
             >
@@ -157,21 +98,124 @@ function AgentChatLaunchChoices({ worktreeId }: { worktreeId: string }): React.J
 
 export function AgentChatColumn(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const target = useActiveAgentTarget()
   const { expanded, toggleExpanded } = useAgentChatColumnState(
     useShallow((s) => ({ expanded: s.expanded, toggleExpanded: s.toggleExpanded }))
   )
 
+  const rows = useWorktreeAgentRows(activeWorktreeId ?? '', activeWorktreeId != null)
+  const terminalTabs = useAppStore((s) =>
+    activeWorktreeId
+      ? (s.tabsByWorktree[activeWorktreeId] ?? EMPTY_TERMINAL_TABS)
+      : EMPTY_TERMINAL_TABS
+  )
+  const sessions = useMemo(() => buildAgentPanelSessions(rows, terminalTabs), [rows, terminalTabs])
+
+  const selectedSessionKey = useAgentPanelState((s) =>
+    activeWorktreeId ? (s.selectedSessionKeyByWorktree[activeWorktreeId] ?? null) : null
+  )
+  const activeTabId = useAppStore((s) =>
+    activeWorktreeId ? (s.activeTabIdByWorktree[activeWorktreeId] ?? null) : null
+  )
+  const target = useMemo(
+    () => resolveAgentPanelTargetSession(sessions, selectedSessionKey, activeTabId),
+    [sessions, selectedSessionKey, activeTabId]
+  )
+  const targetTab = useMemo(
+    () => terminalTabs.find((tab) => tab.id === target?.tabId) ?? null,
+    [terminalTabs, target?.tabId]
+  )
+
+  const viewOverride = useAgentPanelState((s) =>
+    target ? s.sessionViewBySessionKey[target.key] : undefined
+  )
+  const setSessionView = useAgentPanelState((s) => s.setSessionView)
+  const chatCapable = isNativeChatSupportedAgent(target?.agent ?? null)
+  const view = target ? (viewOverride ?? defaultAgentPanelSessionView(target.agent)) : 'chat'
+  const showTerminal = target != null && (!chatCapable || view === 'terminal')
+
+  const ptyMaps = useAppStore(
+    useShallow((s) => ({
+      ptyIdsByTabId: s.ptyIdsByTabId,
+      terminalLayoutsByTabId: s.terminalLayoutsByTabId
+    }))
+  )
+  const targetPtyId = target
+    ? resolveAgentPanelPtyId(
+        target,
+        ptyMaps.ptyIdsByTabId,
+        ptyMaps.terminalLayoutsByTabId,
+        targetTab?.ptyId
+      )
+    : null
+
+  // Панельная сессия не должна держать tab.viewMode==='chat': TerminalPane
+  // отрисовал бы собственный чат-оверлей поверх портированного терминала.
+  useEffect(() => {
+    if (targetTab && isAgentPanelManagedTab(targetTab) && targetTab.viewMode === 'chat') {
+      useAppStore.getState().setTabViewMode(targetTab.id, 'terminal')
+    }
+  }, [targetTab, targetTab?.viewMode])
+
+  // Публикуем хост панельного терминала: TerminalPaneOverlayLayer портирует
+  // TerminalPane выбранной сессии в тело панели (см. agent-panel-state).
+  const panelHostTabId = showTerminal && target ? target.tabId : null
+  useEffect(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const worktreeId = activeWorktreeId
+    useAgentPanelState.getState().setPanelTerminalHostTabId(worktreeId, panelHostTabId)
+    return () => {
+      useAgentPanelState.getState().setPanelTerminalHostTabId(worktreeId, null)
+    }
+  }, [activeWorktreeId, panelHostTabId])
+
+  // Перефит xterm после смены хоста/сессии — портал меняет геометрию контейнера.
+  useEffect(() => {
+    if (!showTerminal) {
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [showTerminal, target?.tabId])
+
+  const setPanelTerminalBodyElement = useAgentPanelState((s) => s.setPanelTerminalBodyElement)
+
   return (
     <div className="relative flex h-full w-full min-h-0 flex-col">
-      {/* Slim chrome: expand/collapse to/from full center width. */}
-      <div className="flex h-7 shrink-0 items-center justify-end px-1.5">
+      <div className="flex h-7 shrink-0 items-center gap-1 pr-1.5">
+        {activeWorktreeId && sessions.length > 0 ? (
+          <AgentSessionTabStrip
+            worktreeId={activeWorktreeId}
+            sessions={sessions}
+            activeSessionKey={target?.key ?? null}
+          />
+        ) : (
+          <div className="min-w-0 flex-1" />
+        )}
+        {target && chatCapable ? (
+          <button
+            type="button"
+            onClick={() => setSessionView(target.key, view === 'chat' ? 'terminal' : 'chat')}
+            aria-label={view === 'chat' ? 'Показать терминал' : 'Показать чат'}
+            title={view === 'chat' ? 'Показать терминал' : 'Показать чат'}
+            className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+          >
+            {view === 'chat' ? (
+              <SquareTerminal className="size-3.5" />
+            ) : (
+              <MessageSquare className="size-3.5" />
+            )}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={toggleExpanded}
           aria-label={expanded ? 'Свернуть чат' : 'Развернуть чат'}
           title={expanded ? 'Свернуть чат' : 'Развернуть чат'}
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
         >
           {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
         </button>
@@ -179,12 +223,26 @@ export function AgentChatColumn(): React.JSX.Element {
 
       <div className="flex min-h-0 flex-1 flex-col">
         {target ? (
-          <NativeChatView
-            terminalTabId={target.terminalTabId}
-            paneKey={target.paneKey}
-            targetPtyId={target.targetPtyId}
-            launchAgent={target.launchAgent}
-          />
+          showTerminal ? (
+            // Цель портала живого TerminalPane выбранной сессии (тот же
+            // приём, что activity-terminal-portal): пейн не перемонтируется,
+            // TUI-состояние (alt-screen) сохраняется.
+            <div className="relative min-h-0 flex-1 overflow-hidden">
+              <div
+                ref={setPanelTerminalBodyElement}
+                className="absolute inset-0 min-h-0 min-w-0"
+                data-agent-panel-terminal-body="true"
+              />
+            </div>
+          ) : (
+            <NativeChatView
+              key={target.key}
+              terminalTabId={target.tabId}
+              paneKey={target.paneKey ?? `${target.tabId}:`}
+              targetPtyId={targetPtyId}
+              launchAgent={targetTab?.launchAgent ?? null}
+            />
+          )
         ) : activeWorktreeId ? (
           <AgentChatLaunchChoices worktreeId={activeWorktreeId} />
         ) : null}

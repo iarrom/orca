@@ -370,6 +370,38 @@ describe('WorktreeCardAgents activation', () => {
     expect(staleAgentRowMocks.dismissStaleAgentRowByKey).toHaveBeenCalledWith(paneKey)
   })
 
+  // [FORK] Панельная агент-сессия: клик по строке выбирает сессию в панели
+  // агентов вместо активации скрытого таба в группе.
+  it('selects a panel-managed agent row in the agent panel instead of focusing its hidden tab', async () => {
+    const { useAgentPanelState } = await import('@/components/agent-panel/agent-panel-state')
+    useAgentPanelState.setState({ selectedSessionKeyByWorktree: {} })
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'managed-agent-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({
+        paneKey,
+        tabId,
+        agentType: 'claude',
+        prompt: 'Panel-managed worker',
+        worktreeId: 'wt-1'
+      })
+    ]
+    mockTabsByWorktree = { 'wt-1': [{ id: tabId, launchAgent: 'claude' } as { id: string }] }
+    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    expect(capturedRowActivations).toHaveLength(1)
+    capturedRowActivations[0].onActivate(tabId, paneKey)
+
+    expect(activationMocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
+    expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+    expect(useAgentPanelState.getState().selectedSessionKeyByWorktree['wt-1']).toBe(paneKey)
+    expect(staleAgentRowMocks.dismissStaleAgentRowByKey).not.toHaveBeenCalled()
+  })
+  // [/FORK]
+
   it('reveals the worktree and focuses a compact automation worker row hydrated during reveal', async () => {
     mockAgentActivityDisplayMode = 'compact'
     const tabId = 'compact-worker-tab'

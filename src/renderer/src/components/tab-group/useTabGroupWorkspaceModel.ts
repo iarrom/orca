@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the split-group workspace model intentionally keeps
    group-scoped activation, close, split, and tab-order rules together so the extracted
    controller cannot drift from the TabGroupPanel surface it coordinates. */
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { OpenFile } from '@/store/slices/editor'
 import type {
@@ -29,6 +29,10 @@ import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+// [FORK] Панель агент-сессий: managed-табы скрыты из таб-бара и не могут
+// быть активными в группе; их контент живёт в панели агентов.
+import { isAgentPanelManagedTab } from '../agent-panel/agent-panel-managed-tab'
+// [/FORK]
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -114,7 +118,6 @@ export function useTabGroupWorkspaceModel({
     [groupId, worktreeState.unifiedTabs]
   )
   const activeItemId = group?.activeTabId ?? null
-  const activeTab = groupTabs.find((item) => item.id === activeItemId) ?? null
   // Why: split groups render tab labels from unified tabs, but terminal shell
   // identity lives on the terminal tab so icons survive default-shell changes.
   const terminalTabById = useMemo(
@@ -122,10 +125,45 @@ export function useTabGroupWorkspaceModel({
     [worktreeState.terminalTabs]
   )
 
+  // [FORK] Managed-агент-таб (панельная сессия) не может быть «активным» в
+  // группе: его чип скрыт, а контент живёт в панели агентов. Если стор всё же
+  // указывает на него (гидрация старой сессии, pickNextActiveTab при закрытии),
+  // прячем его из модели и конвергируем стор на ближайший видимый таб (MRU →
+  // tabOrder) — этим же путём чинится и слой оверлеев, читающий group.activeTabId.
+  const isManagedUnifiedTab = useCallback(
+    (item: Tab | null | undefined): boolean =>
+      !!item &&
+      item.contentType === 'terminal' &&
+      isAgentPanelManagedTab(terminalTabById.get(item.entityId)),
+    [terminalTabById]
+  )
+  const rawActiveTab = groupTabs.find((item) => item.id === activeItemId) ?? null
+  const activeTab = isManagedUnifiedTab(rawActiveTab) ? null : rawActiveTab
+  const managedActiveFallbackId = useMemo(() => {
+    if (!group || !rawActiveTab || !isManagedUnifiedTab(rawActiveTab)) {
+      return null
+    }
+    const visibleIds = new Set(
+      groupTabs.filter((item) => !isManagedUnifiedTab(item)).map((item) => item.id)
+    )
+    const recent = (group.recentTabIds ?? []).toReversed().find((id) => visibleIds.has(id))
+    return recent ?? group.tabOrder.find((id) => visibleIds.has(id)) ?? null
+  }, [group, groupTabs, isManagedUnifiedTab, rawActiveTab])
+  const activateTabForFallback = useAppStore((state) => state.activateTab)
+  useEffect(() => {
+    if (managedActiveFallbackId) {
+      activateTabForFallback(managedActiveFallbackId)
+    }
+  }, [activateTabForFallback, managedActiveFallbackId])
+  // [/FORK]
+
   const terminalTabs = useMemo<TerminalTabItem[]>(
     () =>
       groupTabs
         .filter((item) => item.contentType === 'terminal')
+        // [FORK] Панельные агент-сессии не показываются в таб-баре группы.
+        .filter((item) => !isAgentPanelManagedTab(terminalTabById.get(item.entityId)))
+        // [/FORK]
         .map((item) => {
           const terminalTab = terminalTabById.get(item.entityId)
           return {
@@ -496,18 +534,38 @@ export function useTabGroupWorkspaceModel({
   )
 
   const closeGroup = useCallback(() => {
-    const items = [...(useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? [])].filter(
+    const state = useAppStore.getState()
+    const items = [...(state.unifiedTabsByWorktree[worktreeId] ?? [])].filter(
       (item) => item.groupId === groupId
     )
+    // [FORK] Закрытие группы не убивает скрытые панельные агент-сессии:
+    // переносим их в соседнюю группу (без активации); если группа
+    // единственная, они остаются в ней и группа не схлопывается.
+    const managedItems = items.filter((item) => isManagedUnifiedTab(item))
+    const managedIds = new Set(managedItems.map((item) => item.id))
+    const siblingGroup = (state.groupsByWorktree[worktreeId] ?? []).find(
+      (candidate) => candidate.id !== groupId
+    )
+    // [/FORK]
     for (const item of items) {
+      if (managedIds.has(item.id)) {
+        continue
+      }
       closeItem(item.id, { skipEmptyCheck: true })
     }
+    // [FORK]
+    if (managedItems.length > 0 && siblingGroup) {
+      for (const item of managedItems) {
+        useAppStore.getState().moveUnifiedTabToGroup(item.id, siblingGroup.id, { activate: false })
+      }
+    }
+    // [/FORK]
     // Why: empty split groups are layout state, not tab state. The workspace
     // model owns collapsing those placeholder panes so views do not need to
     // understand when closing tabs is insufficient to remove a group shell.
     closeEmptyGroup(worktreeId, groupId)
     leaveWorktreeIfEmpty()
-  }, [closeEmptyGroup, closeItem, groupId, leaveWorktreeIfEmpty, worktreeId])
+  }, [closeEmptyGroup, closeItem, groupId, isManagedUnifiedTab, leaveWorktreeIfEmpty, worktreeId])
 
   const closeAllEditorTabsInGroup = useCallback(() => {
     for (const item of groupTabs) {
@@ -534,11 +592,17 @@ export function useTabGroupWorkspaceModel({
       // ids here instead and route them through the same dirty-aware closeMany path
       // used by individual tab closes so the Cancel -> zombie-file hazard is impossible.
       const siblingIds = groupTabs
-        .filter((candidate) => candidate.id !== itemId && !candidate.isPinned)
+        .filter(
+          (candidate) =>
+            candidate.id !== itemId &&
+            !candidate.isPinned &&
+            // [FORK] «Закрыть остальные» не убивает скрытые панельные сессии.
+            !isManagedUnifiedTab(candidate)
+        )
         .map((candidate) => candidate.id)
       closeMany(siblingIds)
     },
-    [closeMany, groupTabs]
+    [closeMany, groupTabs, isManagedUnifiedTab]
   )
 
   const closeToRight = useCallback(
@@ -556,11 +620,12 @@ export function useTabGroupWorkspaceModel({
       const tabById = new Map(groupTabs.map((candidate) => [candidate.id, candidate]))
       const rightIds = order.slice(index + 1).filter((id) => {
         const candidate = tabById.get(id)
-        return candidate ? !candidate.isPinned : false
+        // [FORK] «Закрыть справа» не убивает скрытые панельные сессии.
+        return candidate ? !candidate.isPinned && !isManagedUnifiedTab(candidate) : false
       })
       closeMany(rightIds)
     },
-    [closeMany, group, groupTabs]
+    [closeMany, group, groupTabs, isManagedUnifiedTab]
   )
 
   const tabBarOrder = useMemo(
