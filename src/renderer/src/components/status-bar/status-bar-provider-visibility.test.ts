@@ -32,6 +32,13 @@ describe('isProviderConfigured', () => {
     expect(isProviderConfigured(null)).toBe(false)
   })
 
+  it('treats a missing provider key as not configured instead of crashing', () => {
+    // [FORK] Version skew: a RateLimitState pushed by an older main process
+    // (dev HMR, remote/web host) lacks newer provider keys entirely, so the
+    // status bar receives `undefined` rather than `null`.
+    expect(isProviderConfigured(undefined)).toBe(false)
+  })
+
   it('hides an unconfigured (unavailable) provider', () => {
     // The bug: Gemini OAuth off / OpenCode Go cookie unset returns a non-null
     // `unavailable` object, which previously slipped past the `!== null` gate
