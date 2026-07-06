@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -37,14 +38,24 @@ describe('electron-builder config', () => {
   })
 
   it('keeps runtime resources available through extraResources', () => {
-    expect(electronBuilderConfig.mac.extraResources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
-          to: 'Orca Computer Use.app'
-        })
-      ])
+    // [FORK] the config bundles the macOS computer-use helper only when it was
+    // actually built (Swift helper needs full Xcode) — mirror that condition.
+    const macHelperBuilt = existsSync(
+      join(
+        import.meta.dirname,
+        '../../native/computer-use-macos/.build/release/Orca Computer Use.app'
+      )
     )
+    if (macHelperBuilt) {
+      expect(electronBuilderConfig.mac.extraResources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
+            to: 'Orca Computer Use.app'
+          })
+        ])
+      )
+    }
     expect(electronBuilderConfig.linux.extraResources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
