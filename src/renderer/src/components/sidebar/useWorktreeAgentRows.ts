@@ -36,7 +36,11 @@ export {
  * selector work on high-frequency agent status pings.
  */
 export function useWorktreeAgentRows(worktreeId: string, active = true): DashboardAgentRow[] {
-  const tabs = useAppStore((s) => (active ? s.tabsByWorktree[worktreeId] : undefined))
+  // Why: card unit tests pass partial store mocks; production state owns this
+  // map, but a missing mock map should read as an empty slice (same contract
+  // as worktree-agent-row-selectors). [FORK] load-bearing since the agent
+  // panel activates this hook on every card, not just 'inline-agents' ones.
+  const tabs = useAppStore((s) => (active ? s.tabsByWorktree?.[worktreeId] : undefined))
   // Why: narrow the subscriptions to only THIS worktree's entries via
   // useShallow. Subscribing to the whole agentStatusByPaneKey map would make
   // every on-screen card re-render on any agent-status update anywhere —

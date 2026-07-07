@@ -3172,7 +3172,10 @@ describe('WorktreeList header styles', () => {
 
     expect(source).toContain('resolveProjectGroupHeaderColor({')
     expect(source).toContain('headerKey: row.key')
-    expect(source).toContain('color={repoHeaderColor}')
+    // [FORK] Заголовок проекта без цветного аватара (нейтральная иконка, как в
+    // Cursor): resolved-цвет теперь только приглушает tone, не красит глиф.
+    expect(source).toContain("repoHeaderColor ? 'text-muted-foreground' : row.tone")
+    expect(source).not.toContain('color={repoHeaderColor}')
   })
 
   it('adapts projected setup rows for sidebar project grouping', () => {

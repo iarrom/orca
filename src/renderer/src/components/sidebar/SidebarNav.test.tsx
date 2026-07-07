@@ -273,21 +273,14 @@ describe('SidebarNav', () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
   })
 
-  it('hides the worktree palette shortcut until the search field is hovered or focused', async () => {
+  // [FORK] Поиск воркспейсов перенесён из SidebarNav в titlebar-left (иконка
+  // рядом с тогглом сайдбара, App.tsx) — в самом SidebarNav кнопки больше нет.
+  it('does not render the worktree search button (moved to the titlebar)', async () => {
     const container = await renderSidebarNav()
 
-    const searchButton = container.querySelector(
-      'button[aria-label="Search worktrees and browser tabs"]'
-    )
-    expect(searchButton).not.toBeNull()
-
-    const shortcuts = searchButton?.querySelector('span.hidden')
-    expect(shortcuts?.className).toContain('hidden')
-    expect(shortcuts?.className).toContain('group-hover:inline-flex')
-    expect(shortcuts?.className).toContain('group-focus-within:inline-flex')
-    expect(shortcuts?.textContent).toContain('⌘')
-    expect(shortcuts?.textContent).toContain('J')
-    expect(searchButton?.querySelector('kbd')).toBeNull()
+    expect(
+      container.querySelector('button[aria-label="Search worktrees and browser tabs"]')
+    ).toBeNull()
   })
 
   it('hides task source shortcuts until the Tasks row is hovered or focused', async () => {

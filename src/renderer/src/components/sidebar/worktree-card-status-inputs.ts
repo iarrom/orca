@@ -3,6 +3,9 @@ import type { TerminalPaneLayoutNode } from '../../../../shared/types'
 
 // Why: these selectors return fresh maps whose top-level values preserve
 // underlying per-tab references, so callers must compare them shallowly.
+// Map reads are optional-chained: card unit tests pass partial store mocks,
+// and a missing mock map should behave like an empty slice (same contract as
+// worktree-agent-row-selectors).
 
 type WorktreeCardStatusInputState = Pick<AppState, 'runtimePaneTitlesByTabId' | 'ptyIdsByTabId'> & {
   tabsByWorktree: Record<string, readonly { id: string }[]>
@@ -17,8 +20,8 @@ export function selectRuntimePaneTitlesForWorktree(
   worktreeId: string
 ): Record<string, Record<number, string>> {
   const out: Record<string, Record<number, string>> = {}
-  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
+  for (const tab of state.tabsByWorktree?.[worktreeId] ?? []) {
+    const paneTitles = state.runtimePaneTitlesByTabId?.[tab.id]
     if (paneTitles) {
       out[tab.id] = paneTitles
     }
@@ -31,8 +34,8 @@ export function selectLivePtyIdsForWorktree(
   worktreeId: string
 ): Record<string, string[]> {
   const out: Record<string, string[]> = {}
-  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    const ids = state.ptyIdsByTabId[tab.id]
+  for (const tab of state.tabsByWorktree?.[worktreeId] ?? []) {
+    const ids = state.ptyIdsByTabId?.[tab.id]
     if (ids && ids.length > 0) {
       out[tab.id] = ids
     }
@@ -45,8 +48,8 @@ export function selectTerminalLayoutRootsForWorktree(
   worktreeId: string
 ): Record<string, TerminalPaneLayoutNode | null | undefined> {
   const out: Record<string, TerminalPaneLayoutNode | null | undefined> = {}
-  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    out[tab.id] = state.terminalLayoutsByTabId[tab.id]?.root
+  for (const tab of state.tabsByWorktree?.[worktreeId] ?? []) {
+    out[tab.id] = state.terminalLayoutsByTabId?.[tab.id]?.root
   }
   return out
 }
@@ -57,8 +60,8 @@ export function selectTerminalLayoutRootsForWorktrees(
 ): Record<string, TerminalPaneLayoutNode | null | undefined> {
   const out: Record<string, TerminalPaneLayoutNode | null | undefined> = {}
   for (const worktreeId of worktreeIds) {
-    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-      out[tab.id] = state.terminalLayoutsByTabId[tab.id]?.root
+    for (const tab of state.tabsByWorktree?.[worktreeId] ?? []) {
+      out[tab.id] = state.terminalLayoutsByTabId?.[tab.id]?.root
     }
   }
   return out
