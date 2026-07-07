@@ -3,12 +3,8 @@ import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IBuffer, IDisposable } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
-import {
-  detectAgentStatusFromTitle,
-  agentTypeToIconAgent,
-  isGeminiTerminalTitle,
-  isClaudeAgent
-} from '@/lib/agent-status'
+import { detectAgentStatusFromTitle, agentTypeToIconAgent, isClaudeAgent } from '@/lib/agent-status'
+import { resolvePaneTitleDecision } from './terminal-title-evidence'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
@@ -92,6 +88,7 @@ import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stabl
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { resolveSshPaneConnectGate } from './ssh-pane-connect-gate'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
@@ -165,7 +162,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import {
   isExpectedAgentProcess,
   recognizeAgentProcessFromCommandLine
@@ -1390,15 +1387,22 @@ export function connectPanePty(
     )?.title
     return runtimeTitle ?? tabTitle ?? null
   }
-  const hasFreshPaneAgentSurface = (): boolean => {
-    const state = useAppStore.getState()
-    const entry = state.agentStatusByPaneKey[cacheKey]
-    const now = Date.now()
-    const entryIsFresh =
-      entry &&
+  // Why: a pane-scoped explicit row only counts as current ownership evidence
+  // when it is fresh and not already `done` — a stale or completed row is a
+  // leftover from a prior agent that may no longer own the shell.
+  const isFreshActivePaneAgentEntry = (
+    entry: AgentStatusEntry | undefined
+  ): entry is AgentStatusEntry => {
+    return (
+      !!entry &&
       typeof entry.updatedAt === 'number' &&
-      now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
-    if (entryIsFresh && entry.state !== 'done') {
+      Date.now() - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS &&
+      entry.state !== 'done'
+    )
+  }
+  const hasFreshPaneAgentSurface = (): boolean => {
+    const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+    if (isFreshActivePaneAgentEntry(entry)) {
       return true
     }
     const liveTitle = getLivePaneAgentTitle()
@@ -1491,6 +1495,23 @@ export function connectPanePty(
       paneStartup?.initialAgentStatus?.agent ??
       commandInferredPaneAgent ??
       state.agentStatusByPaneKey[cacheKey]?.agentType
+    )
+  }
+  // Why: the renderer veto (owner evidence beating a Gemini-looking title) must
+  // use only pane-scoped, CURRENT ownership. getAuthoritativePaneAgent leads
+  // with the tab-shared `tab.launchAgent` and a never-cleared
+  // `paneStartup.launchAgent`, which would let a sibling split pane or a reused
+  // pane keep WebGL for a genuine Gemini terminal (#7428 regression class).
+  // Launch identity is excluded, and the never-clearing startup seed
+  // (`paneStartup.initialAgentStatus`) too; a stale or `done` explicit row is
+  // ignored via the freshness predicate so a reused pane cannot inherit a prior
+  // agent's veto. Only live foreground command inference and a fresh, active
+  // hook row count. A genuine OMP/Pi pane stays protected owner-independently by
+  // the isPiAgentTitle guard inside isGeminiTerminalTitle.
+  const getPaneScopedRendererOwner = (): AgentType | undefined => {
+    const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+    return (
+      commandInferredPaneAgent ?? (isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined)
     )
   }
   const clearInferredInterruptWorkingTitle = (): void => {
@@ -1790,7 +1811,7 @@ export function connectPanePty(
       (entry) => entry.id === deps.tabId
     )
     const title = currentTitle ?? tab?.title
-    if (!title || resolveExplicitTerminalTitleAgentType(title) === null) {
+    if (!title || resolveCommittedTitleAgentType(title) === null) {
       return
     }
     const neutralTitle = neutralTerminalTitle()
@@ -2166,7 +2187,17 @@ export function connectPanePty(
   let allowInitialIdleCacheSeed = false
 
   const onTitleChange = (title: string, rawTitle: string): void => {
-    const paneTitle = normalizeCompatibleAgentTitleForOwner(title, getAuthoritativePaneAgent())
+    // Why: one owner-aware decision drives the display label, the runtime/tab
+    // title, task-completion tracking, and the renderer gate, so raw title text
+    // can no longer disable GPU behind stronger owner evidence (#7428/#7447).
+    const decision = resolvePaneTitleDecision({
+      normalizedTitle: title,
+      rawTitle,
+      displayOwnerAgentType: getAuthoritativePaneAgent(),
+      rendererOwnerAgentType: getPaneScopedRendererOwner(),
+      userGpuMode: useAppStore.getState().settings?.terminalGpuAcceleration ?? 'auto'
+    })
+    const paneTitle = decision.displayTitle
     if (
       shouldSuppressCodexAutoApprovalSyntheticTitle(paneTitle, {
         paneKey: cacheKey,
@@ -2176,10 +2207,10 @@ export function connectPanePty(
     ) {
       return
     }
-    manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
+    manager.setPaneGpuRendering(pane.id, decision.rendererPolicy.gpuEnabled)
     deps.setRuntimePaneTitle(deps.tabId, pane.id, paneTitle)
     if (syncAgentTaskCompleteTrackingEnabled()) {
-      agentCompletionCoordinator.observeTitle(rawTitle)
+      agentCompletionCoordinator.observeTitle(decision.rawTitle)
     }
     // Why: only the focused pane should drive the tab title — otherwise two
     // agents in split panes cause rapid title flickering as each emits OSC
@@ -5163,6 +5194,13 @@ export function connectPanePty(
       }
       observeStartupDraftPasteReadiness(data)
       resetHiddenOutputRestoreIfPtyChanged()
+      if (meta?.droppedBacklog === true) {
+        // Why: main trimmed this pty's unsent backlog (the renderer was
+        // background-throttled/frozen and stopped ACKing). Rebuild the dropped
+        // span from the main headless snapshot — same recovery the renderer's
+        // own 2 MB scheduler overflow uses. No-op cost when already visible+synced.
+        markHiddenOutputRestoreNeeded()
+      }
       respondToTerminalPixelSizeQueries(data)
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       for (const link of observeTerminalGitHubPRLink(data)) {
@@ -5433,13 +5471,23 @@ export function connectPanePty(
         deps.restoredLeafId && deps.restoredPtyIdByLeafId
           ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
           : null
-      const pendingSessionId =
-        restoredLeafSessionId ?? storeState.deferredSshSessionIdsByTabId[deps.tabId]
-      const isDeferredTarget = storeState.deferredSshReconnectTargets.includes(connectionId)
+      const gate = resolveSshPaneConnectGate({
+        connectionId,
+        sshStatus: storeState.sshConnectionStates.get(connectionId)?.status,
+        isDeferredTarget: storeState.deferredSshReconnectTargets.includes(connectionId),
+        restoredLeafSessionId,
+        deferredTabSessionId: storeState.deferredSshSessionIdsByTabId[deps.tabId],
+        tabPtyId: storeState.tabsByWorktree[deps.worktreeId]?.find((t) => t.id === deps.tabId)
+          ?.ptyId,
+        hasLeafSessionMap: Boolean(
+          deps.restoredPtyIdByLeafId && Object.keys(deps.restoredPtyIdByLeafId).length > 0
+        )
+      })
+      const pendingSessionId = gate.pendingSessionId
       console.warn(
-        `[pty-connection] SSH tab=${deps.tabId} connectionId=${connectionId} pendingSessionId=${pendingSessionId} isDeferredTarget=${isDeferredTarget}`
+        `[pty-connection] SSH tab=${deps.tabId} connectionId=${connectionId} pendingSessionId=${pendingSessionId} sshConnected=${gate.sshConnected}`
       )
-      if (pendingSessionId || isDeferredTarget) {
+      if (gate.enterDeferredFlow) {
         void (async () => {
           // Why: if the target requires a passphrase/password and no credential
           // is cached yet, auto-firing ssh.connect would surprise the user —
