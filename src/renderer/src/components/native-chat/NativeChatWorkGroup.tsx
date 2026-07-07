@@ -1,15 +1,21 @@
 // [FORK] Renders one agent response's intermediate work (thinking + tool
-// actions). While the turn is live the steps show expanded and shimmering; once
-// the final answer arrives (or the agent stops) they collapse under a muted
-// "Worked for …" summary the user can expand. Intermediate work is dimmed so
-// only the final answer reads full-strength.
-import { useState } from 'react'
+// actions). While the turn is live only the CURRENT action shows — a single
+// shimmering line that tickers to the next action (old line slides up and
+// fades, the new one rises from below). Once the final answer arrives (or the
+// agent stops) the full step trail collapses under a muted "Worked for …"
+// summary the user can expand. Intermediate work is dimmed so only the final
+// answer reads full-strength.
+import { useMemo, useState } from 'react'
 import { ChevronDown, SquareChevronRight } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
 import { formatWorkedDuration } from './native-chat-turn-groups'
+import {
+  deriveCurrentLiveAction,
+  NativeChatLiveActionTicker
+} from './native-chat-live-action-ticker'
 
 type NativeChatWorkGroupProps = {
   steps: NativeChatMessage[]
@@ -33,6 +39,20 @@ export function NativeChatWorkGroup({
   allowFileUriLinks = false
 }: NativeChatWorkGroupProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  // Live: только текущее действие одной строкой (см. комментарий модуля).
+  const liveAction = useMemo(() => (live ? deriveCurrentLiveAction(steps) : null), [live, steps])
+
+  if (live) {
+    return (
+      <div className="opacity-80">
+        <NativeChatLiveActionTicker
+          action={liveAction}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+        />
+      </div>
+    )
+  }
 
   const renderedSteps = steps.map((message) => (
     <MessageRow
@@ -45,11 +65,6 @@ export function NativeChatWorkGroup({
       allowFileUriLinks={allowFileUriLinks}
     />
   ))
-
-  // Live: steps stay visible (slightly dimmed) with the active one shimmering.
-  if (live) {
-    return <div className="flex flex-col gap-3 opacity-80">{renderedSteps}</div>
-  }
 
   const durationLabel = formatWorkedDuration(durationMs)
   const summary = durationLabel

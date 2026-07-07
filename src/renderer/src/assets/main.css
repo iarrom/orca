@@ -1371,6 +1371,49 @@
   }
 }
 
+/* [FORK] Live-action ticker: пока агент работает, чат показывает одну строку
+   текущего действия. Смена действия — старая строка уходит вверх с fade,
+   новая поднимается снизу (см. native-chat-live-action-ticker.tsx). */
+@keyframes native-chat-live-action-leave {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+@keyframes native-chat-live-action-enter {
+  from {
+    transform: translateY(80%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.native-chat-live-action-leave {
+  animation: native-chat-live-action-leave 240ms ease-out forwards;
+}
+
+.native-chat-live-action-enter {
+  animation: native-chat-live-action-enter 240ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-chat-live-action-leave {
+    display: none;
+  }
+
+  .native-chat-live-action-enter {
+    animation: none;
+  }
+}
+
 /* Why: the collapsed summary still uses pill spacing, while expanded compact
    agents read as a quiet tree inside the existing worktree card. */
 .compact-agent-summary-panel {
