@@ -27,7 +27,14 @@ const relayExtraResource = {
 // do not fall through to a developer checkout's node_modules.
 const packagedRuntimeNodeModuleResources = createPackagedRuntimeNodeModuleResources()
 
-const commonExtraResources = [relayExtraResource, ...packagedRuntimeNodeModuleResources]
+// [FORK] Условие MIT-лицензии апстрима: копия уведомления должна ехать в
+// каждом дистрибутиве — кладём LICENSE в ресурсы всех платформ.
+const upstreamLicenseResource = { from: 'LICENSE', to: 'LICENSE.txt' }
+const commonExtraResources = [
+  upstreamLicenseResource,
+  relayExtraResource,
+  ...packagedRuntimeNodeModuleResources
+]
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
