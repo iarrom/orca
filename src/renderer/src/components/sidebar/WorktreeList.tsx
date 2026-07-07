@@ -4811,7 +4811,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     activeSurfaceVariant={
                       isActiveWorktree && !forceActiveSurface ? activeSurfaceVariant : 'primary'
                     }
-                    isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
+                    // [FORK] Одиночный клик не оставляет заливку на карточке
+                    // (Cursor-стиль); поверхность выделения — только у настоящих
+                    // батчей (cmd/shift-клик, 2+ воркспейса).
+                    isMultiSelected={
+                      selectedWorktreeIds.has(itemRow.worktree.id) && selectedWorktreeIds.size > 1
+                    }
                     revealHighlight={highlightedRevealRowKey === itemRow.rowKey}
                     revealHighlightTone={revealHighlightTone}
                     selectedWorktrees={selectedWorktrees}
