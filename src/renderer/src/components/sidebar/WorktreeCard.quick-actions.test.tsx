@@ -127,7 +127,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 function getBranchMetadataLabelTag(markup: string): string {
   const labelTag = markup
     .match(/<span[^>]*>quick-action<\/span>/g)
-    ?.find((tag) => tag.includes('text-[11px]'))
+    ?.find((tag) => tag.includes('text-muted-foreground'))
 
   expect(labelTag).toBeDefined()
   return labelTag ?? ''
@@ -305,7 +305,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('quick-action')
     const branchLabelTag = getBranchMetadataLabelTag(markup)
     expect(branchLabelTag).toContain('truncate')
-    expect(branchLabelTag).toContain('text-[11px]')
+    expect(branchLabelTag).toContain('text-sm')
     expect(branchLabelTag).toContain('text-muted-foreground')
     expect(branchLabelTag).toContain('leading-none')
     expect(markup).toContain('data-worktree-card-meta-row=""')

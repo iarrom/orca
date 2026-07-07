@@ -46,7 +46,7 @@ describe('WorktreeTitleInlineRename', () => {
     expect(markup).not.toContain('cursor-text')
     expect(markup).not.toContain('title="Feature workspace"')
     expect(markup).toContain('tabindex="0"')
-    expect(markup).toContain('font-semibold text-foreground')
+    expect(markup).toContain('font-normal text-foreground')
     expect(markup).toContain('Unread:')
     expect(markup).toContain('Feature workspace')
   })

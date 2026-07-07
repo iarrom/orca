@@ -249,7 +249,8 @@ export function WorktreeTitleInlineRename({
         ref={handleRootRef}
         className={cn(
           'relative grid min-w-0 truncate leading-tight text-foreground',
-          showUnreadEmphasis ? 'font-semibold' : 'font-normal',
+          // [FORK] Без жирного: unread уже несёт янтарная точка в статус-лейне.
+          'font-normal',
           className,
           editingClassName
         )}
@@ -297,8 +298,9 @@ export function WorktreeTitleInlineRename({
     )
   }
 
+  // [FORK] Без жирного (unread уже несёт янтарная точка в статус-лейне).
   const titleEmphasisClassName = showUnreadEmphasis
-    ? 'font-semibold text-foreground'
+    ? 'font-normal text-foreground'
     : dimReadTitle
       ? 'font-normal text-foreground/80'
       : 'font-normal text-foreground'

@@ -67,7 +67,7 @@ const SidebarNav = React.memo(function SidebarNav() {
               onClick={openAutomationsPage}
               aria-current={automationsActive ? 'page' : undefined}
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] font-medium tracking-tight transition-colors',
+                'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm tracking-tight transition-colors',
                 automationsActive
                   ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
                   : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
@@ -94,7 +94,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           onClick={openActivityPage}
           aria-current={activityActive ? 'page' : undefined}
           className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] font-medium tracking-tight transition-colors',
+            'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm tracking-tight transition-colors',
             activityActive
               ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
               : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
@@ -111,7 +111,7 @@ const SidebarNav = React.memo(function SidebarNav() {
             {translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')}
           </span>
           {activityUnreadCount > 0 ? (
-            <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
+            <span className="rounded-full bg-primary px-1.5 py-px text-[10px] text-primary-foreground">
               {activityUnreadCount}
             </span>
           ) : null}
@@ -128,7 +128,7 @@ const SidebarNav = React.memo(function SidebarNav() {
               }}
               aria-current={mobileActive ? 'page' : undefined}
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] font-medium tracking-tight transition-colors',
+                'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm tracking-tight transition-colors',
                 mobileActive
                   ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
                   : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
@@ -145,7 +145,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 {translate('auto.components.sidebar.SidebarNav.1b5c41caee', 'Orca Mobile')}
               </span>
               {mobileOnboardingBadge.visible ? (
-                <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
+                <span className="rounded-full bg-primary px-1.5 py-px text-[10px] text-primary-foreground">
                   {translate('auto.components.sidebar.SidebarNav.c86d83b5c3', 'New')}
                 </span>
               ) : null}

@@ -241,7 +241,7 @@ describe('WorktreeCard linked PR display', () => {
     expect(unreadMarkup).toContain('data-worktree-status-lane-unread=""')
     expect(unreadMarkup).toContain('data-worktree-unread-alert=""')
     expect(unreadMarkup).toContain('bg-amber-500')
-    expect(getInlineRenameTitleTag(unreadMarkup)).toContain('font-semibold text-foreground')
+    expect(getInlineRenameTitleTag(unreadMarkup)).toContain('font-normal text-foreground')
     expect(getInlineRenameTitleTag(readMarkup)).toContain('font-normal text-foreground/80')
   }, 20_000)
 

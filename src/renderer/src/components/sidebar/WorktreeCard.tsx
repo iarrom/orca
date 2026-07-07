@@ -1504,7 +1504,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
               disabled={isDeleting || affiliateListMode}
               showUnreadEmphasis={showUnreadEmphasis}
               dimReadTitle={newCardStyle}
-              className="text-[13px] leading-5"
+              className="text-sm leading-5"
               editingClassName="flex-1"
               titleWrapper={titleWrapper}
               onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
@@ -1676,7 +1676,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
               {showRepoBadgeInMetaRow && repo && (
                 <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
                   <RepoBadgeMark color={repo.badgeColor} />
-                  <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
+                  <span className="text-[10px] text-foreground truncate max-w-[6rem] leading-none lowercase">
                     {repo.displayName}
                   </span>
                 </div>
@@ -1694,7 +1694,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
               {showIdentityInNewCard ? (
                 <TruncatedSidebarLabel
                   text={identityDisplay!}
-                  className="text-[11px] text-muted-foreground leading-none"
+                  className="text-sm text-muted-foreground leading-none"
                   tooltipEnabled={!hasHoverDetails}
                 />
               ) : isFolder && !newCardStyle ? (
@@ -1707,7 +1707,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
               ) : showBranch ? (
                 <TruncatedSidebarLabel
                   text={branch}
-                  className="text-[11px] text-muted-foreground leading-none"
+                  className="text-sm text-muted-foreground leading-none"
                   // Why: the whole-card details hover already exposes full
                   // identity; a nested tooltip would compete for the same hover.
                   tooltipEnabled={!hasHoverDetails}
