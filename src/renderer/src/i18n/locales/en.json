@@ -12669,7 +12669,8 @@
       }
     },
     "tab-bar": {
-      "newBrowserTab": "New Browser Tab"
+      "newBrowserTab": "New Browser Tab",
+      "openTasks": "Tasks"
     },
     "tab-group": {
       "toggleRightSidebar": "Toggle right sidebar"

@@ -69,6 +69,9 @@ vi.mock('lucide-react', () => ({
   Globe: function Globe() {
     return null
   },
+  ListTodo: function ListTodo() {
+    return null
+  },
   Plus: function Plus() {
     return null
   },

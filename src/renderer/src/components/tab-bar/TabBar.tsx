@@ -11,6 +11,7 @@ import {
   FilePlus,
   FileText,
   Globe,
+  ListTodo,
   Plus,
   Smartphone,
   TerminalSquare
@@ -280,6 +281,11 @@ function TabBarInner({
   const newFileShortcut = useShortcutLabel('tab.newMarkdown')
   const openMarkdownShortcut = useOptionalShortcutLabel('tab.openMarkdown')
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
+  // [FORK] Задачи как среда основного окна: кнопка в квик-креате открывает
+  // модуль Tasks (activeView 'tasks') и подсвечена, пока он активен.
+  const tasksViewActive = useAppStore((s) => s.activeView === 'tasks')
+  const openTaskPage = useAppStore((s) => s.openTaskPage)
+  const closeTaskPage = useAppStore((s) => s.closeTaskPage)
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const mobileEmulatorTabIntroDismissed = useAppStore((s) => s.mobileEmulatorTabIntroDismissed)
@@ -1050,7 +1056,7 @@ function TabBarInner({
       data-native-file-drop-target="editor"
     >
       {/* [FORK] Cursor-style quick-create icons at the strip start (terminal /
-          browser / agents); the "+" menu itself moved to the row's right edge. */}
+          browser / tasks / agents); the "+" menu itself moved to the row's right edge. */}
       <div
         className="my-auto flex shrink-0 items-center gap-0.5 pl-1"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -1071,6 +1077,23 @@ function TabBarInner({
             onClick={onNewBrowserTab}
           >
             <Globe className="size-3.5" />
+          </button>
+        ) : null}
+        {!terminalOnly ? (
+          // Задачи (Linear/GitHub/…) рендерятся модулем Tasks в основном теле;
+          // повторный клик возвращает предыдущую вью (previousViewBeforeTasks).
+          <button
+            className={
+              tasksViewActive
+                ? 'flex h-6 w-6 items-center justify-center rounded-md bg-accent text-foreground'
+                : 'flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+            }
+            title={translate('components.tab-bar.openTasks', 'Tasks')}
+            aria-label={translate('components.tab-bar.openTasks', 'Tasks')}
+            aria-pressed={tasksViewActive}
+            onClick={() => (tasksViewActive ? closeTaskPage() : openTaskPage())}
+          >
+            <ListTodo className="size-3.5" />
           </button>
         ) : null}
         {showAgentLaunchItems
