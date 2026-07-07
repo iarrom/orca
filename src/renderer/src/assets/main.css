@@ -222,7 +222,10 @@
   --foreground: #fafafa;
   --card: #141414;
   --card-foreground: #fafafa;
-  --popover: #141414;
+  /* [FORK] Плавающие поверхности (дропдауны/поповеры) — материал композера
+     нейтив-чата: input/30 поверх канваса (≈#222). Прежний #141414 был темнее
+     фона, и апстрим маскировал это полупрозрачным «стеклом» в каждом меню. */
+  --popover: color-mix(in srgb, var(--input) 30%, var(--background));
   --popover-foreground: #fafafa;
   --primary: #e5e5e5;
   --primary-foreground: #171717;
