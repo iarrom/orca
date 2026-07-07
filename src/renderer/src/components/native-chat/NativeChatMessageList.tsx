@@ -81,7 +81,7 @@ function TypingIndicatorRow(): React.JSX.Element {
       aria-live="polite"
     >
       <div className="flex h-8 items-center text-muted-foreground">
-        <span className="native-chat-step-shimmer text-xs font-medium">
+        <span className="native-chat-step-shimmer text-sm font-medium">
           {translate('components.native-chat.thought.active', 'Thinking…')}
         </span>
       </div>
