@@ -170,7 +170,10 @@ export function MessageRow({
       >
         <div
           className={cn(
-            'max-w-[85%] rounded-xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-card-foreground',
+            // [FORK] Та же поверхность, что у композера (NativeChatComposerField):
+            // border-input + bg-card (dark: bg-input/30) — пузырь и инпут читаются
+            // как один материал.
+            'max-w-[85%] rounded-xl rounded-tr-sm border border-input bg-card px-3 py-2 text-sm text-card-foreground shadow-xs dark:bg-input/30',
             // Pinned prompt collapses to 2 lines; click/Enter toggles full text.
             sticky && 'cursor-pointer'
           )}
