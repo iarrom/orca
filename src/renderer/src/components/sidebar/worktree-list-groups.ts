@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: sidebar row construction keeps every grouping mode in one pure module so reveal, virtualized rendering, and tests share the same flat row contract. */
-import { CircleX, FolderTree, List, Pin } from 'lucide-react'
+import { CircleX, Folder, List, Pin } from 'lucide-react'
 import type React from 'react'
 import type {
   DetectedWorktree,
@@ -323,7 +323,9 @@ export const PR_GROUP_META: Record<
 
 export const PROJECT_GROUP_META = {
   tone: 'text-foreground',
-  icon: FolderTree
+  // [FORK] Простая папка вместо FolderTree — спокойнее читается в заголовке
+  // проекта (Cursor-стиль).
+  icon: Folder
 } as const
 
 export function getProjectGroupHeaderKey(groupId: string | null): string {

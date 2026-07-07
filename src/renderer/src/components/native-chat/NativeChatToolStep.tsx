@@ -3,7 +3,6 @@
 // place to the command/diff and its output. While the call is the agent's active
 // (still-running) step, the label shimmers and uses the present-tense verb.
 import { useState } from 'react'
-import { ChevronDown, SquareChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -76,11 +75,8 @@ export function NativeChatToolStep({
           hasDetail ? 'cursor-pointer' : 'cursor-default'
         )}
       >
-        {expanded ? (
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <SquareChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
+        {/* [FORK] Без шеврона: лид-глиф строки — иконка тула; строка целиком
+            остаётся кликабельной для разворачивания деталей. */}
         <ToolIcon className="size-3 shrink-0 text-muted-foreground/80" />
         {active ? (
           <span className="native-chat-step-shimmer min-w-0 truncate text-xs">
