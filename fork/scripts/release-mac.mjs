@@ -78,7 +78,9 @@ if (!process.env.CSC_LINK && !keychainIdentity) {
 }
 if (!process.env.CSC_LINK && keychainIdentity) {
   // electron-builder и build-computer-macos возьмут identity из связки.
-  process.env.CSC_NAME = keychainIdentity
+  // electron-builder требует имя БЕЗ префикса «Developer ID Application:»;
+  // codesign в build-computer-macos матчит и по частичному имени.
+  process.env.CSC_NAME = keychainIdentity.replace(/^Developer ID Application: /, '')
   console.log(`▶ Подпись из Keychain: ${keychainIdentity}`)
 }
 for (const key of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) {
