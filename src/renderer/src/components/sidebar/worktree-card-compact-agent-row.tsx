@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { agentStateLabel } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -93,6 +93,8 @@ type CompactAgentRowProps = {
   reserveDisclosureGutter?: boolean
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
+  /** [FORK] Непрочитанность строки — для янтарного кружка завершённой работы. */
+  isUnvisited?: boolean
   cacheTimerActive?: boolean
 }
 
@@ -109,6 +111,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   reserveDisclosureGutter = false,
   isFocusedPane = false,
   hideIdentityIcon = false,
+  isUnvisited = false,
   cacheTimerActive = true
 }: CompactAgentRowProps) {
   const hasChildDisclosure =
@@ -116,6 +119,12 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
   const dotState = getAgentDotState(agent)
+  const chatStarted = getAgentRowPrimaryText(agent.entry).length > 0
+  const rowIndicator = !chatStarted
+    ? ('draft' as const)
+    : isUnvisited && (dotState === 'done' || dotState === 'idle')
+      ? ('unread-done' as const)
+      : null
   const primary = getCompactAgentPrimary(agent)
   const isLineageChild = agent.lineage?.depth === 1
   const secondary = getCompactAgentSecondary(agent)
@@ -188,7 +197,14 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       ) : reserveDisclosureGutter ? (
         <span className="size-4 shrink-0" aria-hidden />
       ) : null}
-      <AgentStateDot state={dotState} size="sm" />
+      {/* [FORK] Единый минимальный индикатор вместо стейт-дота: приглушённый
+          кружок — драфт (чат не начат), янтарный — агент завершил и не
+          прочитано; в остальных случаях ничего (и без резервирования отступа). */}
+      {rowIndicator === 'draft' ? (
+        <span className="size-2 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden />
+      ) : rowIndicator === 'unread-done' ? (
+        <span className="size-2 shrink-0 rounded-full bg-amber-500" aria-hidden />
+      ) : null}
       {!hideIdentityIcon && (
         <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
           <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />

@@ -405,6 +405,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           now={now}
           // [FORK] Cursor-стиль: строка агента — просто текст, без иконки тула.
           hideIdentityIcon={AGENT_PANEL_ENABLED}
+          isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
           onActivate={
             agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
           }
