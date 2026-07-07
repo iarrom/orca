@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <strong>Tobasco — наш форк <a href="https://github.com/stablyai/orca">Orca</a>, ADE для работы с флотом параллельных агентов.</strong><br/>
+  <strong>Tobasco — Cursor-like ADE для работы с флотом параллельных агентов (форк <a href="https://github.com/stablyai/orca">Orca</a>).</strong><br/>
   Display-бренд — Tobasco; внутренние идентификаторы намеренно остаются <code>orca</code>, чтобы ежедневные upstream-мержи проходили без боли.
 </p>
 
