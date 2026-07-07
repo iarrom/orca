@@ -1343,7 +1343,8 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: native-chat-step-shimmer 1.8s linear infinite;
+  /* [FORK] 3.4s: медленный, спокойный проход блика — 1.8s раздражал. */
+  animation: native-chat-step-shimmer 3.4s linear infinite;
 }
 
 /* Respect reduced-motion: drop the sweep, keep a plain muted label. */
