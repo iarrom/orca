@@ -594,7 +594,7 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('compact-agent-row')
     expect(markup).toContain('group/compact-agent-row')
-    expect(markup).toContain('flex h-6 items-center gap-1')
+    expect(markup).toContain('flex h-7 items-center gap-1')
     expect(markup).not.toContain('<img')
     expect(markup).not.toContain('max-h-36')
     expect(markup).not.toContain('data-testid="agent-row"')
@@ -615,7 +615,7 @@ describe('WorktreeCardAgents', () => {
 
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
-    expect(markup).toContain('flex h-6 items-center gap-1')
+    expect(markup).toContain('flex h-7 items-center gap-1')
     expect(markup).not.toContain('<img')
     expect(markup).not.toContain('max-h-36')
   })
@@ -641,7 +641,7 @@ describe('WorktreeCardAgents', () => {
 
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
-    expect(markup).toContain('flex h-6 items-center gap-1')
+    expect(markup).toContain('flex h-7 items-center gap-1')
     expect(markup).not.toContain('<img')
     expect(markup).not.toContain('max-h-36')
   })
@@ -661,7 +661,7 @@ describe('WorktreeCardAgents', () => {
 
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
-    expect(markup).toContain('flex h-6 items-center gap-1')
+    expect(markup).toContain('flex h-7 items-center gap-1')
     expect(markup).not.toContain('<img')
     expect(markup).not.toContain('max-h-36')
     expect(markup).not.toContain('href="https://example.com/screenshot.png"')
