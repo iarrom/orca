@@ -299,7 +299,10 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           className={cn(
             'shrink-0 text-[10px] tabular-nums',
             // Why: the muted timestamp drops out against the selected-row fill.
-            isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/60'
+            isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/60',
+            // [FORK] На hover время уступает место кнопкам пина/архива (Cursor-стиль).
+            (onTogglePin || onArchive) &&
+              'group-hover/compact-agent-row:hidden group-focus-within/compact-agent-row:hidden'
           )}
         >
           {shortTime}
