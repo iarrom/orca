@@ -46,16 +46,9 @@ export function estimateRenderRowSize(
     )
   }
   if (row?.type === 'header') {
-    return (
-      GROUP_HEADER_ROW_HEIGHT +
-      (shouldUseHeaderTopSpacing({
-        rows,
-        index,
-        firstHeaderIndex
-      })
-        ? SECONDARY_GROUP_HEADER_TOP_MARGIN
-        : 0)
-    )
+    // [FORK] Project-folder headers carry no extra top spacer — the
+    // virtualizer's base row gap alone separates folders (denser sidebar).
+    return GROUP_HEADER_ROW_HEIGHT
   }
   if (row?.type === 'lineage-group') {
     return 100 + Math.max(0, row.rows.length - 1) * 96

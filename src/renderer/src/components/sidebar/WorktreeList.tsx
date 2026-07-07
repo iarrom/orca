@@ -4071,11 +4071,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               // beneath it instead of at the viewport top.
               const stickyTopClass =
                 activeStickyHostIndexRef.current !== null ? 'top-[35px]' : '-top-px'
-              const hasHeaderTopSpacing = shouldUseHeaderTopSpacing({
-                rows: renderRows,
-                index: vItem.index,
-                firstHeaderIndex
-              })
               const isRepoHeader = groupBy === 'repo' && row.repo !== undefined
               const isProjectGroupHeader = groupBy === 'repo' && row.projectGroup !== undefined
               const projectIdForHeader = isRepoHeader ? row.repo!.id : undefined
@@ -4180,12 +4175,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   ref={measureVirtualRowElement}
                   className={cn(
                     'left-0 right-0',
-                    // Why: the inter-group spacer only applies while the header
-                    // scrolls in normally; the pinned header drops it to sit
-                    // flush at the top. The swap fires when the header row
-                    // reaches the top (see getActiveStickyHeaderIndexForScroll),
-                    // so the previous repo no longer stays pinned over it.
-                    hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
+                    // [FORK] No inter-group spacer: the virtualizer's base row
+                    // gap alone separates project folders (denser sidebar).
                     isActiveStickyHeader
                       ? cn('sticky z-20 bg-worktree-sidebar', stickyTopClass)
                       : 'absolute top-0'

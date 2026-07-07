@@ -215,8 +215,8 @@ describe('estimateRenderRowSize', () => {
       secondaryHeaderIndex
     )
 
-    expect(inactiveSize).toBe(32)
-    expect(activeSize).toBe(32)
+    expect(inactiveSize).toBe(28)
+    expect(activeSize).toBe(28)
   })
 
   it('estimates imported worktree line rows with a stable compact height', () => {
