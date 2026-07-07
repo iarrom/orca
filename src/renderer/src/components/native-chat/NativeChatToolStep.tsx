@@ -12,6 +12,8 @@ import type {
 } from '../../../../shared/native-chat-types'
 import { diffFromText, diffFromToolCall } from './native-chat-diff'
 import { describeToolAction, type ToolActionLabel } from './native-chat-tool-verb'
+// [FORK] Иконка тула в строке шага (MCP — «молния», остальные — по действию).
+import { getToolStepIcon } from './native-chat-tool-icon'
 import { NativeChatDiffView } from './NativeChatDiffView'
 import { isSubagentToolName } from './native-chat-subagent'
 import { NativeChatSubagentStep } from './NativeChatSubagentStep'
@@ -62,6 +64,7 @@ export function NativeChatToolStep({
   const command = call && isShellCall(call.name) ? firstCommand(call.input) : null
   const resultDiff = result ? diffFromText(result.output) : null
   const hasDetail = callDiff !== null || command !== null || result !== null || label.length > 40
+  const ToolIcon = getToolStepIcon(call?.name ?? null)
 
   return (
     <div>
@@ -78,6 +81,7 @@ export function NativeChatToolStep({
         ) : (
           <SquareChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
         )}
+        <ToolIcon className="size-3 shrink-0 text-muted-foreground/80" />
         {active ? (
           <span className="native-chat-step-shimmer min-w-0 truncate text-xs">
             <span className="font-medium">{activeVerb}</span>
