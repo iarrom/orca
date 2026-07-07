@@ -5,7 +5,8 @@ import {
 } from '../../../../shared/native-chat-types'
 
 const IMAGE_SOURCE_MARKER = /^\[Image:\s*source:\s*(.+?)\]\s*$/
-const IMAGE_PROMPT_MARKER = /^\[Image #\d+\]\s*/
+// All leading markers at once: a multi-image prompt starts with several.
+const IMAGE_PROMPT_MARKER = /^(?:\[Image #\d+\]\s*)+/
 
 function soleText(message: NativeChatMessage): string | null {
   return message.blocks.length === 1 && isTextBlock(message.blocks[0])
@@ -46,49 +47,92 @@ function imagePromptMarkerStartsMessage(message: NativeChatMessage): boolean {
 /** Claude records an attached image as two user transcript turns:
  *  `[Image: source: /path]` and then `[Image #1] prompt`. Merge them back into
  *  one native turn so the UI keeps the same chip+text shape as the optimistic
- *  send and does not show raw TUI marker text after a view remount. */
+ *  send and does not show raw TUI marker text after a view remount.
+ *
+ *  The pair's turns often share one timestamp, so the assembler's UUID
+ *  tie-break can emit them in either order — the prompt is matched both ahead
+ *  of and behind its image turns, and a run of consecutive image turns
+ *  (multi-image send) folds into the same prompt. */
 export function normalizeImageTranscriptMessages(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
   const normalized: NativeChatMessage[] = []
+  // Index of the last pushed user prompt that carried an [Image #N] marker;
+  // -1 once anything else lands after it (adjacency requirement).
+  let markerPromptIndex = -1
+
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index]!
     if (message.role !== 'user') {
       normalized.push(message)
+      markerPromptIndex = -1
       continue
     }
-    const imagePath = imageSourcePathFromText(soleText(message) ?? '')
-    const next = messages[index + 1]
+    const firstImagePath = imageSourcePathFromText(soleText(message) ?? '')
+    if (!firstImagePath) {
+      const hadMarker = imagePromptMarkerStartsMessage(message)
+      normalized.push({
+        ...message,
+        blocks: stripFirstImagePromptMarker(message.blocks)
+      })
+      markerPromptIndex = hadMarker ? normalized.length - 1 : -1
+      continue
+    }
+
+    // Collect the run of consecutive image-source turns (multi-image sends).
+    const paths = [firstImagePath]
+    let cursor = index
+    while (cursor + 1 < messages.length) {
+      const candidate = messages[cursor + 1]!
+      const path =
+        candidate.role === 'user' && candidate.source === message.source
+          ? imageSourcePathFromText(soleText(candidate) ?? '')
+          : null
+      if (!path) {
+        break
+      }
+      paths.push(path)
+      cursor += 1
+    }
+    const imageBlocks = paths.map((path) => ({ type: 'image-ref' as const, path }))
+
+    const next = messages[cursor + 1]
     if (
-      imagePath &&
       next?.role === 'user' &&
       next.source === message.source &&
       imagePromptMarkerStartsMessage(next)
     ) {
       normalized.push({
         ...next,
-        blocks: [
-          { type: 'image-ref', path: imagePath },
-          ...stripFirstImagePromptMarker(next.blocks)
-        ]
+        blocks: [...imageBlocks, ...stripFirstImagePromptMarker(next.blocks)]
       })
-      index += 1
+      markerPromptIndex = normalized.length - 1
+      index = cursor + 1
       continue
     }
-    // A lone `[Image: source: /path]` turn (no following `[Image #1]` prompt —
-    // e.g. an image sent with no caption) still renders as an image chip rather
-    // than the raw marker text.
-    if (imagePath) {
+
+    // Reversed order: the prompt sorted before its image turns — fold the run
+    // into that already-pushed bubble.
+    const prompt = markerPromptIndex >= 0 ? normalized[markerPromptIndex] : undefined
+    if (prompt && prompt.source === message.source && markerPromptIndex === normalized.length - 1) {
+      normalized[markerPromptIndex] = {
+        ...prompt,
+        blocks: [...imageBlocks, ...prompt.blocks]
+      }
+      index = cursor
+      continue
+    }
+
+    // A lone image run (no caption in either direction) still renders as image
+    // chips rather than the raw marker text — one chip turn per source turn.
+    for (let offset = 0; offset < paths.length; offset += 1) {
       normalized.push({
-        ...message,
-        blocks: [{ type: 'image-ref', path: imagePath }]
+        ...messages[index + offset]!,
+        blocks: [imageBlocks[offset]!]
       })
-      continue
     }
-    normalized.push({
-      ...message,
-      blocks: stripFirstImagePromptMarker(message.blocks)
-    })
+    markerPromptIndex = -1
+    index = cursor
   }
   return normalized
 }
