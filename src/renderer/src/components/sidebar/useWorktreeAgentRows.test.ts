@@ -240,7 +240,8 @@ describe('buildWorktreeAgentRows', () => {
       now: 3000
     })
 
-    expect(rows.map((row) => row.paneKey)).toEqual(['tab-1:2', PANE_KEY_1])
+    // [FORK] Новые сверху: live-строка (2000) раньше retained (1500).
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1, 'tab-1:2'])
   })
 
   it('decays a stale working entry to idle but leaves a stale done entry alone', () => {
@@ -464,10 +465,11 @@ describe('buildWorktreeAgentRows', () => {
       })
     )
 
-    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1, PANE_KEY_2, PANE_KEY_3])
-    expect(rows[0].lineage).toMatchObject({ depth: 0, childCount: 1 })
-    expect(rows[1].lineage).toMatchObject({ depth: 1, childCount: 0 })
-    expect(rows[1].entry.orchestration).toEqual({
+    // [FORK] Новые сверху: корень P3 (1100) раньше P1 (1000); ребёнок при родителе.
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_3, PANE_KEY_1, PANE_KEY_2])
+    expect(rows[1].lineage).toMatchObject({ depth: 0, childCount: 1 })
+    expect(rows[2].lineage).toMatchObject({ depth: 1, childCount: 0 })
+    expect(rows[2].entry.orchestration).toEqual({
       taskId: 'task-2',
       dispatchId: 'ctx-2',
       parentPaneKey: PANE_KEY_1,
@@ -631,7 +633,8 @@ describe('applyAgentRowLineage', () => {
     })
     const ordered = applyAgentRowLineage(rows)
 
-    expect(ordered.map((row) => row.paneKey)).toEqual([PANE_KEY_2, PANE_KEY_1, PANE_KEY_3])
+    // [FORK] Новые сверху: дети идут при родителе, свежий сиблинг первым.
+    expect(ordered.map((row) => row.paneKey)).toEqual([PANE_KEY_2, PANE_KEY_3, PANE_KEY_1])
     expect(ordered[0].lineage).toMatchObject({ depth: 0, childCount: 2 })
     expect(ordered[1].lineage).toMatchObject({
       depth: 1,
@@ -692,13 +695,14 @@ describe('applyAgentRowLineage', () => {
 
     const ordered = applyAgentRowLineage(rows)
 
+    // [FORK] Новые сверху: свежий корень (sibling, 4000) первым, дерево целиком после.
     expect(ordered.map((row) => row.paneKey)).toEqual([
+      PANE_KEY_4,
       PANE_KEY_1,
       PANE_KEY_2,
-      PANE_KEY_3,
-      PANE_KEY_4
+      PANE_KEY_3
     ])
-    expect(ordered[1].lineage).toMatchObject({ depth: 1, childCount: 1 })
-    expect(ordered[2].lineage).toMatchObject({ depth: 1, childCount: 0 })
+    expect(ordered[2].lineage).toMatchObject({ depth: 1, childCount: 1 })
+    expect(ordered[3].lineage).toMatchObject({ depth: 1, childCount: 0 })
   })
 })

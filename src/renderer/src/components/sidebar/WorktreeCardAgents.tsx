@@ -190,6 +190,18 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   const handleActivateAgentTab = useCallback(
     (tabId: string, paneKey: string) => {
+      // [FORK] Черновик панельной сессии (синтетический ключ `tabId:`): лист
+      // ещё неизвестен — просто выбираем сессию в панели активного воркспейса.
+      if (paneKey === `${tabId}:`) {
+        activateAndRevealWorktree(worktreeId)
+        const draftTab = useAppStore
+          .getState()
+          .tabsByWorktree[worktreeId]?.find((t) => t.id === tabId)
+        if (draftTab && isAgentPanelManagedTab(draftTab)) {
+          useAgentPanelState.getState().selectSession(worktreeId, paneKey)
+        }
+        return
+      }
       const parsed = parsePaneKey(paneKey)
       if (!parsed) {
         // Why: malformed or legacy numeric keys cannot be resolved safely after

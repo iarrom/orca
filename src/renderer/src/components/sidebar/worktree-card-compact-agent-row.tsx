@@ -41,7 +41,13 @@ function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
 
 function getCompactAgentPrimary(agent: DashboardAgentRowData): string {
   const prompt = getAgentRowPrimaryText(agent.entry)
-  return prompt || agentStateLabel(getAgentDotState(agent))
+  if (prompt) {
+    return prompt
+  }
+  // [FORK] Черновик нового чата без промпта читается именем таба (как в
+  // панели), а не словом состояния.
+  const tabLabel = agent.tab.customTitle ?? agent.tab.generatedTitle ?? agent.tab.title
+  return tabLabel || agentStateLabel(getAgentDotState(agent))
 }
 
 function getCompactAgentSecondary(agent: DashboardAgentRowData): string {

@@ -15,10 +15,11 @@ export function comparePaneKeysOrdinal(a: string, b: string): number {
 }
 
 export function compareWorktreeAgentRows(a: DashboardAgentRow, b: DashboardAgentRow): number {
+  // [FORK] Новые сверху (Cursor-стиль): свежая сессия рендерится первой строкой.
   return (
-    comparableNumber(a.startedAt) - comparableNumber(b.startedAt) ||
+    comparableNumber(b.startedAt) - comparableNumber(a.startedAt) ||
+    comparableNumber(b.tab.createdAt) - comparableNumber(a.tab.createdAt) ||
     comparableNumber(a.tab.sortOrder) - comparableNumber(b.tab.sortOrder) ||
-    comparableNumber(a.tab.createdAt) - comparableNumber(b.tab.createdAt) ||
     comparePaneKeysOrdinal(a.paneKey, b.paneKey)
   )
 }

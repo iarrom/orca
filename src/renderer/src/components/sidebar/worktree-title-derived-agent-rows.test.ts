@@ -215,6 +215,9 @@ describe('buildTitleDerivedAgentRows', () => {
       now: 2000
     })
 
-    expect(rows).toHaveLength(0)
+    // [FORK] Таб с launchAgent даёт черновую строку своего агента (codex) —
+    // Claude-строка из заголовка по-прежнему не синтезируется.
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ paneKey: 'tab-1:', agentType: 'codex', state: 'idle' })
   })
 })

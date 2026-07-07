@@ -24,6 +24,8 @@ import {
 } from './worktree-title-derived-agent-rows'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 import { compareWorktreeAgentRows } from './worktree-agent-row-order'
+// [FORK] Черновые строки новых чатов (tabId: без hook-статуса).
+import { buildDraftAgentRows } from './worktree-agent-draft-rows'
 import {
   effectiveWorktreeAgentRowStartedAt,
   tabFromWorktreeAttributedStatusEntry
@@ -319,6 +321,9 @@ export function buildWorktreeAgentRows(args: {
       startedAt: ra.startedAt
     })
   }
+
+  // [FORK] Черновые строки только что созданных чатов (см. модуль).
+  rows.push(...buildDraftAgentRows(args.tabs, new Set(rows.map((row) => row.tab.id))))
 
   // Why: hook pings can rebuild the live entry list in a different iteration
   // order. Equal-start agents still need a deterministic sidebar order.
