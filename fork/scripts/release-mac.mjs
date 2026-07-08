@@ -96,6 +96,13 @@ for (const key of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) 
 const releaseEnv = { ...process.env, ORCA_MAC_RELEASE: '1' }
 // --arm64 / --x64 ограничивают сборку одной архитектурой (по умолчанию обе).
 const archFlags = process.argv.slice(2).filter((a) => a === '--arm64' || a === '--x64')
+if (archFlags.length > 0) {
+  // Конфигные arch-списки сильнее CLI-флагов — дублируем выбор через env.
+  releaseEnvArchOverride(archFlags)
+}
+function releaseEnvArchOverride(flags) {
+  process.env.FORK_MAC_ARCHS = flags.map((f) => f.slice(2)).join(',')
+}
 const releaseSteps = process.env.CSC_LINK
   ? [['pnpm', ['run', 'build:mac:release']]]
   : [

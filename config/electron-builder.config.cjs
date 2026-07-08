@@ -260,11 +260,13 @@ module.exports = {
     target: [
       {
         target: 'dmg',
-        arch: ['x64', 'arm64']
+        // [FORK] Явные arch-списки в конфиге перекрывают CLI --arm64/--x64,
+        // поэтому одноархитектурный релиз задаётся через FORK_MAC_ARCHS.
+        arch: process.env.FORK_MAC_ARCHS ? process.env.FORK_MAC_ARCHS.split(',') : ['x64', 'arm64']
       },
       {
         target: 'zip',
-        arch: ['x64', 'arm64']
+        arch: process.env.FORK_MAC_ARCHS ? process.env.FORK_MAC_ARCHS.split(',') : ['x64', 'arm64']
       }
     ]
   },
@@ -272,7 +274,8 @@ module.exports = {
   // silently downgrading to ad-hoc artifacts that look shippable in CI logs.
   forceCodeSigning: isMacRelease,
   dmg: {
-    artifactName: 'orca-macos-${arch}.${ext}',
+    // [FORK] Имя артефакта по бренду форка.
+    artifactName: 'tobasco-macos-${arch}.${ext}',
     // [FORK] Подписываем сам DMG-контейнер (по умолчанию electron-builder
     // этого не делает); нотаризацию dmg доклеивает release-mac.mjs.
     sign: true
