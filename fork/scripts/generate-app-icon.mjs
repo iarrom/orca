@@ -160,12 +160,49 @@ function placeCentered(canvasSize, image, offsetY = 0) {
   return out
 }
 
+// Светлая окантовка (bezel) по краю скруглённого квадрата — как у тёмных
+// системных иконок (Terminal): macOS её не дорисовывает, она часть ассета.
+const BEZEL_WIDTH = 8
+const BEZEL_OPACITY = 0.28
+
+function applyBezel(glyph, size, radius) {
+  const outer = roundedSquareMask(size, radius)
+  const innerSize = size - 2 * BEZEL_WIDTH
+  const inner = roundedSquareMask(innerSize, Math.max(1, radius - BEZEL_WIDTH))
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const ix = x - BEZEL_WIDTH
+      const iy = y - BEZEL_WIDTH
+      const innerCoverage =
+        ix >= 0 && iy >= 0 && ix < innerSize && iy < innerSize ? inner[iy * innerSize + ix] : 0
+      const ring = outer[y * size + x] - innerCoverage
+      if (ring <= 0) {
+        continue
+      }
+      const p = (y * size + x) * 4
+      const sa = ring * BEZEL_OPACITY
+      const da = glyph.data[p + 3] / 255
+      const outA = sa + da * (1 - sa)
+      if (outA === 0) {
+        continue
+      }
+      for (let k = 0; k < 3; k++) {
+        glyph.data[p + k] = Math.round((255 * sa + glyph.data[p + k] * da * (1 - sa)) / outA)
+      }
+      glyph.data[p + 3] = Math.round(outA * 255)
+    }
+  }
+  return glyph
+}
+
 // Композит с safe-area: глиф 824px по центру канвы 1024px + мягкая тень,
 // как у иконок из Icon Composer (иначе иконка выглядит "плоской" в Dock).
 function buildSafeAreaComposite(fullBleed1024) {
-  const glyph = applyMask(
-    resizeImage(fullBleed1024, GLYPH, GLYPH),
-    roundedSquareMask(GLYPH, GLYPH * CORNER_RADIUS_RATIO)
+  const radius = GLYPH * CORNER_RADIUS_RATIO
+  const glyph = applyBezel(
+    applyMask(resizeImage(fullBleed1024, GLYPH, GLYPH), roundedSquareMask(GLYPH, radius)),
+    GLYPH,
+    radius
   )
   const placed = placeCentered(CANVAS, glyph)
   const shadowAlpha = new Float32Array(CANVAS * CANVAS)
