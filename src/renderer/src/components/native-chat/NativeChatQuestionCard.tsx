@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { formatAskAnswer, type AskPrompt } from './native-chat-interactive-prompt'
@@ -16,12 +16,16 @@ export type NativeChatQuestionCardProps = {
 // answer text and replaced by the typed value when selected.
 const OTHER = '__other__'
 
+// Cursor labels each option with a sequential letter badge (A, B, C, …).
+const letterFor = (i: number): string => String.fromCharCode(65 + i)
+
 /**
- * Native renderer for an agent's AskUserQuestion prompt as a wizard: one
- * question per step with tabs across the top (tap to jump, a check once
- * answered), single- or multi-select option rows, an "Other…" row that reveals a
- * free-text input, and a Next button that advances and becomes "Send answer" on
- * the last step. Matches the desktop chat's neutral shadcn styling.
+ * Native renderer for an agent's AskUserQuestion prompt, styled 1:1 with
+ * Cursor's Questions card: a "Questions" header with `‹ N of N ›` paging and a
+ * collapse chevron, the question in semibold, lettered option rows (A/B/C… plus
+ * an "Other…" row that reveals a free-text input), and a right-aligned
+ * Skip / Next footer. Single- or multi-select per question; Next advances and
+ * submits on the last step.
  */
 export function NativeChatQuestionCard({
   prompt,
@@ -29,6 +33,7 @@ export function NativeChatQuestionCard({
   onCancel
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const [index, setIndex] = useState(0)
+  const [collapsed, setCollapsed] = useState(false)
   const [selections, setSelections] = useState<string[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
 
@@ -95,107 +100,132 @@ export function NativeChatQuestionCard({
   const otherSelected = (selections[index] ?? []).includes(OTHER)
 
   return (
-    <div className="shrink-0 border-t border-border bg-muted/30">
-      <div className="mx-auto flex max-h-[22rem] w-full max-w-3xl flex-col px-3 py-2 sm:px-4">
-        {total > 1 ? (
-          <div className="flex gap-1 overflow-x-auto border-b border-border pb-2 scrollbar-sleek">
-            {prompt.questions.map((qq, i) => (
+    <div className="shrink-0 px-3 pb-2 sm:px-4">
+      <div className="mx-auto flex max-h-[24rem] w-full max-w-3xl flex-col rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+        {/* Header: "Questions" · ‹ N of N › · collapse */}
+        <div className="flex items-center justify-between">
+          <span className="text-[13px] font-medium text-muted-foreground">
+            {translate('components.native-chat.question.title', 'Questions')}
+          </span>
+          <div className="flex items-center gap-0.5 text-muted-foreground">
+            {total > 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIndex((i) => Math.max(i - 1, 0))}
+                  disabled={index === 0}
+                  className="flex size-6 items-center justify-center rounded-md hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                  aria-label={translate(
+                    'components.native-chat.question.prev',
+                    'Previous question'
+                  )}
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <span className="px-0.5 text-xs tabular-nums">
+                  {translate('components.native-chat.question.pager', '{{value0}} of {{value1}}', {
+                    value0: index + 1,
+                    value1: total
+                  })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIndex((i) => Math.min(i + 1, total - 1))}
+                  disabled={isLast}
+                  className="flex size-6 items-center justify-center rounded-md hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                  aria-label={translate('components.native-chat.question.next', 'Next question')}
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className="ml-0.5 flex size-6 items-center justify-center rounded-md hover:text-foreground"
+              aria-label={translate('components.native-chat.question.collapse', 'Collapse')}
+            >
+              <ChevronDown
+                className={cn('size-4 transition-transform', collapsed && '-rotate-90')}
+              />
+            </button>
+          </div>
+        </div>
+
+        {collapsed ? null : (
+          <>
+            <p className="mt-2.5 text-[15px] font-semibold leading-snug text-foreground">
+              {q.question}
+            </p>
+
+            <div className="mt-3 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto scrollbar-sleek">
+              {q.options.map((opt, i) => (
+                <OptionRow
+                  key={opt.label}
+                  letter={letterFor(i)}
+                  label={opt.label}
+                  description={opt.description}
+                  selected={(selections[index] ?? []).includes(opt.label)}
+                  onSelect={() => toggle(index, opt.label, q.multiSelect)}
+                />
+              ))}
+              <OptionRow
+                letter={letterFor(q.options.length)}
+                label={translate('components.native-chat.question.other', 'Other…')}
+                selected={otherSelected}
+                onSelect={() => toggle(index, OTHER, q.multiSelect)}
+              />
+              {otherSelected ? (
+                <textarea
+                  autoFocus
+                  value={otherText[index]}
+                  onChange={(e) => setOther(index, e.target.value)}
+                  placeholder={translate(
+                    'components.native-chat.question.otherPlaceholder',
+                    'Type your answer'
+                  )}
+                  rows={2}
+                  className="ml-9 mt-1 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+                />
+              ) : null}
+            </div>
+
+            <div className="mt-3 flex items-center justify-end gap-1.5">
               <button
-                key={i}
                 type="button"
-                onClick={() => setIndex(i)}
+                onClick={onCancel}
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {translate('components.native-chat.question.skip', 'Skip')}
+              </button>
+              <button
+                type="button"
+                onClick={advance}
+                disabled={!currentAnswered}
                 className={cn(
-                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium',
-                  i === index
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
+                  'flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-colors',
+                  'hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50'
                 )}
               >
-                <span className="max-w-[10rem] truncate">
-                  {qq.header ||
-                    translate('components.native-chat.question.step', 'Step {{value0}}', {
-                      value0: i + 1
-                    })}
-                </span>
-                {answerFor(i).length > 0 ? (
-                  <Check className="size-3 text-primary" strokeWidth={3} />
-                ) : null}
+                {translate('components.native-chat.question.next', 'Next')}
+                <CornerDownLeft className="size-3.5 opacity-80" />
               </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="min-h-0 flex-1 overflow-y-auto py-2 scrollbar-sleek">
-          <p className="mb-2 text-sm font-semibold text-foreground">{q.question}</p>
-          <div className="flex flex-col gap-1.5">
-            {q.options.map((opt) => (
-              <OptionRow
-                key={opt.label}
-                label={opt.label}
-                description={opt.description}
-                selected={(selections[index] ?? []).includes(opt.label)}
-                onSelect={() => toggle(index, opt.label, q.multiSelect)}
-              />
-            ))}
-            <OptionRow
-              label={translate('components.native-chat.question.other', 'Other…')}
-              selected={otherSelected}
-              onSelect={() => toggle(index, OTHER, q.multiSelect)}
-            />
-            {otherSelected ? (
-              <textarea
-                autoFocus
-                value={otherText[index]}
-                onChange={(e) => setOther(index, e.target.value)}
-                placeholder={translate(
-                  'components.native-chat.question.otherPlaceholder',
-                  'Type your answer'
-                )}
-                rows={2}
-                className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
-              />
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-2 border-t border-border pt-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {translate('components.native-chat.question.cancel', 'Cancel')}
-          </button>
-          {total > 1 ? (
-            <span className="text-xs text-muted-foreground">
-              {index + 1}/{total}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            onClick={advance}
-            disabled={!currentAnswered}
-            className={cn(
-              'rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-colors',
-              'hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50'
-            )}
-          >
-            {isLast
-              ? translate('components.native-chat.question.send', 'Send answer')
-              : translate('components.native-chat.question.next', 'Next')}
-          </button>
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
 function OptionRow({
+  letter,
   label,
   description,
   selected,
   onSelect
 }: {
+  letter: string
   label: string
   description?: string
   selected: boolean
@@ -206,22 +236,24 @@ function OptionRow({
       type="button"
       onClick={onSelect}
       className={cn(
-        'flex w-full items-start gap-2.5 rounded-md border bg-background px-3 py-2 text-left transition-colors',
-        selected ? 'border-primary' : 'border-border hover:bg-accent/50'
+        'flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left transition-colors',
+        selected ? 'bg-accent' : 'hover:bg-accent/50'
       )}
     >
       <span
         className={cn(
-          'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border',
-          selected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground'
+          'flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-medium transition-colors',
+          selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
         )}
       >
-        {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+        {letter}
       </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-foreground">{label}</span>
+      <span className="min-w-0 pt-0.5">
+        <span className="block text-sm leading-snug text-foreground">{label}</span>
         {description ? (
-          <span className="block text-xs text-muted-foreground">{description}</span>
+          <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+            {description}
+          </span>
         ) : null}
       </span>
     </button>
