@@ -12661,7 +12661,8 @@
       "editMessage": {
         "hint": "按 Esc 取消",
         "send": "发送已编辑的消息"
-      }
+      },
+      "waitingInTerminal": "智能体正在等待终端中的输入"
     },
     "tab": {
       "bar": {

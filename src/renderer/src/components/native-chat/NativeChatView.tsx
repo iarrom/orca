@@ -11,6 +11,7 @@ import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatC
 // [FORK] Доставка отредактированного сообщения тем же путём, что и композер.
 import { useNativeChatEditedMessageSend } from './use-native-chat-edited-message-send'
 import { buildNativeChatPaneCaptureHandlers } from './native-chat-pane-capture-handlers'
+import { NativeChatWaitingNotice } from './NativeChatWaitingNotice'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { useNativeChatFileDrag } from './use-native-chat-file-drag'
 import { NativeChatFileDropOverlay } from './NativeChatFileDropOverlay'
@@ -192,6 +193,7 @@ function NativeChatResolvedView({
   // flips the instant the agent reports 'working' — even when switching to chat
   // mid-turn before the transcript merge has caught up.
   const hookWorking = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state === 'working')
+  const hookWaiting = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state === 'waiting')
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
@@ -419,6 +421,7 @@ function NativeChatResolvedView({
         </div>
         {/* Live interactive cards (question / approval) render just above the
           composer while the agent's interactivePrompt is present (mobile parity). */}
+        {hookWaiting && !interactivePromptActive ? <NativeChatWaitingNotice /> : null}
         <NativeChatInteractiveCard paneKey={paneKey} send={interactiveSend} canSend={canSend} />
         {/* [FORK] Cursor-style Review Plan card: appears once Plan mode writes a
           plan; opens the full plan (right split) and Builds it. */}

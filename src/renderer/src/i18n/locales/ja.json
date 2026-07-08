@@ -12661,7 +12661,8 @@
       "editMessage": {
         "hint": "Esc でキャンセル",
         "send": "編集したメッセージを送信"
-      }
+      },
+      "waitingInTerminal": "エージェントはターミナルでの入力を待っています"
     },
     "tab": {
       "bar": {

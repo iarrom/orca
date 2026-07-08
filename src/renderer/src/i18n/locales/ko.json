@@ -12661,7 +12661,8 @@
       "editMessage": {
         "hint": "Esc 취소",
         "send": "수정한 메시지 보내기"
-      }
+      },
+      "waitingInTerminal": "에이전트가 터미널에서 입력을 기다리고 있습니다"
     },
     "tab": {
       "bar": {

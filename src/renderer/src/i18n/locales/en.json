@@ -12661,7 +12661,8 @@
       "editMessage": {
         "hint": "Esc to cancel",
         "send": "Send edited message"
-      }
+      },
+      "waitingInTerminal": "The agent is waiting for input in the terminal"
     },
     "tab": {
       "bar": {
