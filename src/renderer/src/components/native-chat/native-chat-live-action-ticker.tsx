@@ -41,8 +41,16 @@ export function deriveCurrentLiveAction(
         .join('\n\n')
       return { key: `${message.id}:thought`, kind: 'thought', markdown }
     }
-    const { tools } = splitNativeChatBlocks(message.blocks)
-    const toolSteps = pairToolBlocks(tools)
+    if (!splitNativeChatBlocks(message.blocks).tools.length) {
+      continue
+    }
+    // [FORK] Результат инструмента приходит отдельным сообщением от вызова
+    // (транскрипт Claude), поэтому спариваем через ВЕСЬ ход: иначе последний
+    // степ — «сирота» без call, и тикер показывал бы сырой вывод («Exit code
+    // 2…») вместо действия («Grep …»).
+    const toolSteps = pairToolBlocks(
+      steps.slice(0, m + 1).flatMap((step) => splitNativeChatBlocks(step.blocks).tools)
+    )
     if (toolSteps.length === 0) {
       continue
     }

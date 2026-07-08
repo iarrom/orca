@@ -29,13 +29,30 @@ describe('deriveCurrentLiveAction', () => {
       message('m2', 'assistant', [call('Read'), result(), call('Bash')])
     ]
     const action = deriveCurrentLiveAction(steps)
-    expect(action).toMatchObject({ key: 'm2:tool:1', kind: 'tool' })
+    // [FORK] Индекс в ключе — сквозной по всему ходу (кросс-сообщенчатое спаривание).
+    expect(action).toMatchObject({ key: 'm2:tool:3', kind: 'tool' })
     expect(action?.kind === 'tool' && action.call?.name).toBe('Bash')
   })
 
   it('falls back to the last resolved step when every call has a result', () => {
     const steps = [message('m1', 'assistant', [call('Read'), result(), call('Edit'), result()])]
     expect(deriveCurrentLiveAction(steps)).toMatchObject({ key: 'm1:tool:1', kind: 'tool' })
+  })
+
+  it('pairs a result-only tool message with the call from the previous message', () => {
+    // Транскрипт Claude: tool_use в assistant-сообщении, tool_result — в
+    // следующем tool-сообщении. Тикер должен показать действие, а не сырой
+    // вывод «Exit code 2…» осиротевшего результата.
+    const steps = [
+      message('m1', 'assistant', [call('Grep')]),
+      message('m2', 'tool', [result('Exit code 2\nrg: happ/src: IO error')])
+    ]
+    const action = deriveCurrentLiveAction(steps)
+    expect(action).toMatchObject({
+      kind: 'tool',
+      call: { name: 'Grep' },
+      result: { output: 'Exit code 2\nrg: happ/src: IO error' }
+    })
   })
 
   it('returns a thought action for a trailing reasoning message', () => {
