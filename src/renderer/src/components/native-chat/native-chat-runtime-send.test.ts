@@ -8,6 +8,7 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 }))
 
 import {
+  resetNativeChatSendQueueForTests,
   sendNativeChatMessage,
   sendNativeChatMessageWithImageAttachments,
   submitNativeChatPrompt,
@@ -31,6 +32,7 @@ describe('sendNativeChatMessage', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     sendRuntimePtyInput.mockClear()
+    resetNativeChatSendQueueForTests()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -71,6 +73,7 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     sendRuntimePtyInput.mockClear()
+    resetNativeChatSendQueueForTests()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -116,6 +119,7 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
 describe('empty prompt submit', () => {
   beforeEach(() => {
     sendRuntimePtyInput.mockClear()
+    resetNativeChatSendQueueForTests()
   })
 
   it('submits an empty prompt with a bare Enter', () => {
@@ -140,6 +144,7 @@ describe('sendNativeChatAnswer', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     sendRuntimePtyInput.mockClear()
+    resetNativeChatSendQueueForTests()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -225,5 +230,44 @@ describe('sendNativeChatAnswer', () => {
       buildNativeChatPasteBytes('answer three'),
       NATIVE_CHAT_SUBMIT
     ])
+  })
+})
+
+describe('per-pty send queue', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    sendRuntimePtyInput.mockClear()
+    resetNativeChatSendQueueForTests()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('defers a second send until the first Enter has fired (no gluing)', () => {
+    // Сценарий бага: «/model fable» из пикера и сразу следом сообщение —
+    // раньше тело сообщения ложилось в ту же строку TUI до Enter команды.
+    sendNativeChatMessage(SETTINGS, PTY, '/model fable')
+    sendNativeChatMessage(SETTINGS, PTY, 'длинное сообщение')
+    // Немедленно записано только тело первой команды.
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+    // До Enter первой команды тело второй не пишется.
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    const writtenSoFar = sendRuntimePtyInput.mock.calls.map((call) => call[2])
+    expect(writtenSoFar).toEqual([buildNativeChatPasteBytes('/model fable'), NATIVE_CHAT_SUBMIT])
+    // После полного прогона порядок строгий: тело1, Enter1, тело2, Enter2.
+    vi.runAllTimers()
+    expect(sendRuntimePtyInput.mock.calls.map((call) => call[2])).toEqual([
+      buildNativeChatPasteBytes('/model fable'),
+      NATIVE_CHAT_SUBMIT,
+      buildNativeChatPasteBytes('длинное сообщение'),
+      NATIVE_CHAT_SUBMIT
+    ])
+  })
+
+  it('keeps independent ptys unqueued', () => {
+    sendNativeChatMessage(SETTINGS, PTY, 'a')
+    sendNativeChatMessage(SETTINGS, 'pty-2', 'b')
+    // Оба тела пишутся сразу — очередь только внутри одного pty.
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(2)
   })
 })

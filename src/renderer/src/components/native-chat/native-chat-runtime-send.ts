@@ -53,6 +53,28 @@ export function nativeChatQuestionOffsets(index: number): {
  *  later question bodies/Enters). Safe to call after the send completes. */
 export type NativeChatSendHandle = { cancel: () => void }
 
+// [FORK] Очередь отправок per-pty: тело следующего сенда не пишется, пока не
+// улетел Enter предыдущего (+буфер осадки). Иначе два близких сенда — например
+// «/model …» из пикера и первое сообщение — склеиваются в одну строку TUI, и
+// Claude Code получает /model с многосотсимвольным «алиасом» (API 400 «model:
+// String should have at most 256 characters»).
+export const NATIVE_CHAT_SEND_SETTLE_MS = 150
+const sendBusyUntilByPtyId = new Map<string, number>()
+
+/** Резервирует слот отправки для pty: возвращает задержку (мс), с которой этот
+ *  сенд может начать писать, и помечает pty занятым до его конца. */
+function reserveNativeChatSendSlot(ptyId: string, durationMs: number): number {
+  const now = Date.now()
+  const startAt = Math.max(now, sendBusyUntilByPtyId.get(ptyId) ?? 0)
+  sendBusyUntilByPtyId.set(ptyId, startAt + durationMs + NATIVE_CHAT_SEND_SETTLE_MS)
+  return startAt - now
+}
+
+/** Только для тестов: сброс очереди между кейсами. */
+export function resetNativeChatSendQueueForTests(): void {
+  sendBusyUntilByPtyId.clear()
+}
+
 /**
  * Send a native-chat message through the verified runtime pty path: framed body
  * first, then a separate delayed Enter. `sendRuntimePtyInput` branches local
@@ -64,11 +86,28 @@ export function sendNativeChatMessage(
   ptyId: string,
   text: string
 ): NativeChatSendHandle {
-  sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
-  const timer = setTimeout(() => {
-    sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
-  }, NATIVE_CHAT_SUBMIT_DELAY_MS)
-  return { cancel: () => clearTimeout(timer) }
+  const startDelay = reserveNativeChatSendSlot(ptyId, NATIVE_CHAT_SUBMIT_DELAY_MS)
+  const timers: ReturnType<typeof setTimeout>[] = []
+  const writeBody = (): void => {
+    sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
+  }
+  if (startDelay <= 0) {
+    writeBody()
+  } else {
+    timers.push(setTimeout(writeBody, startDelay))
+  }
+  timers.push(
+    setTimeout(() => {
+      sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+    }, startDelay + NATIVE_CHAT_SUBMIT_DELAY_MS)
+  )
+  return {
+    cancel: () => {
+      for (const timer of timers) {
+        clearTimeout(timer)
+      }
+    }
+  }
 }
 
 export function sendNativeChatMessageWithImageAttachments(
@@ -80,27 +119,34 @@ export function sendNativeChatMessageWithImageAttachments(
   if (imagePaths.length === 0) {
     return sendNativeChatMessage(settings, ptyId, text)
   }
-  const timers: ReturnType<typeof setTimeout>[] = []
-  for (const imagePath of imagePaths) {
-    sendRuntimePtyInput(settings, ptyId, buildNativeChatImagePasteBytes(imagePath))
-  }
   const trimmedText = text.trim()
+  const enterAt =
+    trimmedText.length > 0
+      ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+      : NATIVE_CHAT_SUBMIT_DELAY_MS
+  const startDelay = reserveNativeChatSendSlot(ptyId, enterAt)
+  const timers: ReturnType<typeof setTimeout>[] = []
+  const writeImages = (): void => {
+    for (const imagePath of imagePaths) {
+      sendRuntimePtyInput(settings, ptyId, buildNativeChatImagePasteBytes(imagePath))
+    }
+  }
+  if (startDelay <= 0) {
+    writeImages()
+  } else {
+    timers.push(setTimeout(writeImages, startDelay))
+  }
   if (trimmedText.length > 0) {
     timers.push(
       setTimeout(() => {
         sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
-      }, NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS)
+      }, startDelay + NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS)
     )
   }
   timers.push(
-    setTimeout(
-      () => {
-        sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
-      },
-      trimmedText.length > 0
-        ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
-        : NATIVE_CHAT_SUBMIT_DELAY_MS
-    )
+    setTimeout(() => {
+      sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+    }, startDelay + enterAt)
   )
   return {
     cancel: () => {
@@ -139,17 +185,21 @@ export function sendNativeChatAnswer(
     return sendNativeChatMessage(settings, ptyId, lines[0] ?? '')
   }
   const timers: ReturnType<typeof setTimeout>[] = []
+  const startDelay = reserveNativeChatSendSlot(
+    ptyId,
+    nativeChatQuestionOffsets(lines.length - 1).enterAt
+  )
   lines.forEach((line, index) => {
     const { bodyAt, enterAt } = nativeChatQuestionOffsets(index)
     timers.push(
       setTimeout(() => {
         sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(line))
-      }, bodyAt)
+      }, startDelay + bodyAt)
     )
     timers.push(
       setTimeout(() => {
         sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
-      }, enterAt)
+      }, startDelay + enterAt)
     )
   })
   return {
