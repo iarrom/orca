@@ -789,6 +789,11 @@ export type NativeChatApi = {
     limit?: number,
     transcriptPath?: string
   ) => Promise<NativeChatReadSessionResult>
+  /** [FORK] Newest cursor-agent session for a project cwd (no hook relay). */
+  discoverCursorSession: (
+    cwd: string,
+    minMtimeMs?: number
+  ) => Promise<{ sessionId: string; transcriptPath: string } | null>
   /** Live-tail a transcript: `onAppended` fires with only newly-appended
    *  messages. Returns an unsubscribe fn that closes the main-process watcher. */
   subscribe: (

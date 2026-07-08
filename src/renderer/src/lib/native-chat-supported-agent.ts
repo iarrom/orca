@@ -5,7 +5,9 @@ import type { TuiAgent } from '../../../shared/types'
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set<string>([
   'claude',
   'openclaude',
-  'codex'
+  'codex',
+  // [FORK] cursor-agent: клоду-подобный JSONL-транскрипт + cwd-дискавери сессии.
+  'cursor'
 ])
 
 export function isNativeChatSupportedAgent(

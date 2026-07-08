@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { resolveSessionFilePath } from './session-file-resolver'
+import {
+  cursorProjectSlug,
+  discoverLatestCursorSession,
+  resolveSessionFilePath
+} from './session-file-resolver'
 
 let tempRoots: string[] = []
 
@@ -159,5 +163,43 @@ describe('resolveSessionFilePath', () => {
       transcriptPath: bogus
     })
     expect(resolved).toBe(target)
+  })
+})
+
+// [FORK] cursor-agent: слаг проекта и дискавери свежей сессии по cwd.
+describe('cursor session discovery', () => {
+  it('builds the cursor project slug from a cwd', () => {
+    expect(cursorProjectSlug('/Users/me/Documents/code/budu')).toBe('Users-me-Documents-code-budu')
+  })
+
+  it('resolves a cursor session file by id and discovers the newest session', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cursor-projects-'))
+    tempRoots.push(root)
+    const transcripts = join(root, 'Users-me-Documents-code-budu', 'agent-transcripts')
+    const oldSession = join(transcripts, 'old-session')
+    const newSession = join(transcripts, 'new-session')
+    await mkdir(oldSession, { recursive: true })
+    await mkdir(newSession, { recursive: true })
+    const record = JSON.stringify({
+      role: 'user',
+      message: { content: [{ type: 'text', text: 'hi' }] }
+    })
+    await writeFile(join(oldSession, 'old-session.jsonl'), record)
+    // Новее по mtime: пишем вторым.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await writeFile(join(newSession, 'new-session.jsonl'), record)
+
+    const resolved = await resolveSessionFilePath('cursor', 'old-session', {
+      cursorProjectsDir: root
+    })
+    expect(resolved).toBe(join(oldSession, 'old-session.jsonl'))
+
+    const discovered = await discoverLatestCursorSession('/Users/me/Documents/code/budu', {
+      cursorProjectsDir: root
+    })
+    expect(discovered).toMatchObject({
+      sessionId: 'new-session',
+      transcriptPath: join(newSession, 'new-session.jsonl')
+    })
   })
 })

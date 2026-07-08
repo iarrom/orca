@@ -3682,6 +3682,12 @@ const api = {
     /** Start live tailing for a transcript. `onAppended` fires with only the
      *  newly-appended messages. Returns an unsubscribe fn that closes the
      *  main-process watcher (subscriptionId routes appends to this caller). */
+    // [FORK] Дискавери cursor-сессии по cwd (cursor-agent без hook-реле).
+    discoverCursorSession: (
+      cwd: string,
+      minMtimeMs?: number
+    ): Promise<{ sessionId: string; transcriptPath: string } | null> =>
+      ipcRenderer.invoke('nativeChat:discoverCursorSession', { cwd, minMtimeMs }),
     subscribe: (
       args: {
         subscriptionId: string

@@ -190,3 +190,44 @@ describe('readNativeChatTranscript (errors)', () => {
     expect('error' in result).toBe(true)
   })
 })
+
+// [FORK] cursor-agent: клоду-подобный JSONL с ролью на верхнем уровне.
+describe('readNativeChatTranscript (cursor)', () => {
+  it('decodes cursor records and skips roleless lines', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cursor-transcript-'))
+    tempRoots.push(dir)
+    const filePath = join(dir, 'session.jsonl')
+    await writeFile(
+      filePath,
+      [
+        JSON.stringify({
+          role: 'user',
+          message: { content: [{ type: 'text', text: 'почини баг' }] }
+        }),
+        JSON.stringify({ summary: 'meta record without role' }),
+        JSON.stringify({
+          role: 'assistant',
+          message: {
+            content: [
+              { type: 'text', text: 'смотрю' },
+              { type: 'tool_use', name: 'Read', input: { path: 'a.ts' } }
+            ]
+          }
+        })
+      ].join('\n')
+    )
+    const result = await readNativeChatTranscript('cursor', 'session', { filePath })
+    if (!('messages' in result)) {
+      throw new Error(`expected messages, got ${JSON.stringify(result)}`)
+    }
+    expect(result.messages).toHaveLength(2)
+    expect(result.messages[0]).toMatchObject({ role: 'user' })
+    expect(result.messages[1]).toMatchObject({
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'смотрю' },
+        { type: 'tool-call', name: 'Read' }
+      ]
+    })
+  })
+})

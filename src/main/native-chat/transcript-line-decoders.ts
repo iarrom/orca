@@ -42,6 +42,36 @@ export function decodeClaudeTranscriptLine(
   }
 }
 
+// [FORK] cursor-agent пишет JSONL почти в формате Claude: те же content-блоки,
+// но роль лежит на верхнем уровне записи (`role`, не `type`), нет uuid и
+// таймстампов, а tool_result-блоки не пишутся вовсе (в чате шаги рендерятся
+// вызовами без результатов — как у живого хода).
+export function decodeCursorTranscriptLine(
+  line: string,
+  fallbackId: string
+): NativeChatMessage | null {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return null
+  }
+  const role = record.role
+  if (role !== 'user' && role !== 'assistant') {
+    return null
+  }
+  const message = asRecord(record.message)
+  const blocks = claudeContentBlocks(message?.content)
+  if (blocks.length === 0) {
+    return null
+  }
+  return {
+    id: extractString(message?.id) ?? fallbackId,
+    role: claudeMessageRole(role, blocks),
+    blocks,
+    timestamp: parseTimestamp(record.timestamp),
+    source: 'transcript'
+  }
+}
+
 // Claude marks reasoning via `thinking` content blocks; when a message is made
 // up solely of reasoning, surface it as a reasoning-role message.
 function claudeMessageRole(

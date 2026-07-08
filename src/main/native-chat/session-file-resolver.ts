@@ -14,6 +14,17 @@ function claudeProjectsDir(): string {
   return join(homedir(), '.claude', 'projects')
 }
 
+// [FORK] cursor-agent хранит транскрипты в
+// ~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl,
+// slug — путь cwd без ведущего разделителя, [/.] → '-'.
+function cursorProjectsDir(): string {
+  return join(homedir(), '.cursor', 'projects')
+}
+
+export function cursorProjectSlug(cwd: string): string {
+  return cwd.replace(/^[/\\]+/, '').replace(/[/\\.]/g, '-')
+}
+
 // Why: Orca launches Codex with ORCA_CODEX_HOME pointing at its own managed
 // runtime home, so Orca-started Codex rollout files land under
 // `<managed home>/sessions`, NOT `~/.codex/sessions`. Search the managed home
@@ -34,6 +45,8 @@ export type ResolveSessionFileOptions = {
   /** Override the Codex sessions roots, searched in order (tests / isolated
    *  scans). Defaults to the orca-managed home then CODEX_HOME/~/.codex. */
   codexSessionsDirs?: string[]
+  /** [FORK] Override the cursor-agent projects root (tests / isolated scans). */
+  cursorProjectsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -76,6 +89,20 @@ export async function resolveSessionFilePath(
   if (agent === 'codex') {
     return resolveCodexSessionFile(trimmedId, options.codexSessionsDirs ?? codexSessionsDirs())
   }
+  // [FORK] cursor-agent: <projects>/<slug>/agent-transcripts/<id>/<id>.jsonl.
+  if (agent === 'cursor') {
+    const targetName = `${trimmedId}.jsonl`
+    const files = await walkSessionFiles(
+      options.cursorProjectsDir ?? cursorProjectsDir(),
+      'cursor',
+      [],
+      {
+        extensions: new Set(['.jsonl']),
+        filePredicate: (path) => basename(path) === targetName
+      }
+    )
+    return files[0] ?? null
+  }
   return null
 }
 
@@ -114,4 +141,44 @@ async function resolveCodexSessionFile(
     }
   }
   return null
+}
+
+/** [FORK] Дискавери cursor-сессии без хуков: cursor-agent не интегрирован с
+ *  hook-реле Orca, поэтому id сессии узнаётся с диска — берём самый свежий
+ *  транскрипт проекта (по mtime), появившийся/обновлявшийся после запуска. */
+export async function discoverLatestCursorSession(
+  cwd: string,
+  options: { cursorProjectsDir?: string; minMtimeMs?: number } = {}
+): Promise<{ sessionId: string; transcriptPath: string } | null> {
+  const projectDir = join(
+    options.cursorProjectsDir ?? cursorProjectsDir(),
+    cursorProjectSlug(cwd),
+    'agent-transcripts'
+  )
+  if (!existsSync(projectDir)) {
+    return null
+  }
+  const { readdir, stat } = await import('node:fs/promises')
+  let best: { sessionId: string; transcriptPath: string; mtimeMs: number } | null = null
+  let entries: string[]
+  try {
+    entries = await readdir(projectDir)
+  } catch {
+    return null
+  }
+  for (const entry of entries) {
+    const transcriptPath = join(projectDir, entry, `${entry}.jsonl`)
+    try {
+      const info = await stat(transcriptPath)
+      if (options.minMtimeMs !== undefined && info.mtimeMs < options.minMtimeMs) {
+        continue
+      }
+      if (!best || info.mtimeMs > best.mtimeMs) {
+        best = { sessionId: entry, transcriptPath, mtimeMs: info.mtimeMs }
+      }
+    } catch {
+      // не транскрипт-каталог — пропускаем
+    }
+  }
+  return best ? { sessionId: best.sessionId, transcriptPath: best.transcriptPath } : null
 }

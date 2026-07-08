@@ -9,6 +9,8 @@ import {
   subscribeNativeChatTranscript,
   type NativeChatTranscriptSubscription
 } from '../native-chat/transcript-watch'
+// [FORK] Дискавери cursor-сессии по cwd (у cursor-agent нет hook-реле).
+import { discoverLatestCursorSession } from '../native-chat/session-file-resolver'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -158,6 +160,12 @@ export function clearNativeChatSubscriptions(): void {
 export function registerNativeChatHandlers(): void {
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)
+  )
+  // [FORK] cursor-agent: сессия ищется на диске по cwd проекта.
+  ipcMain.handle(
+    'nativeChat:discoverCursorSession',
+    (_event, args: { cwd: string; minMtimeMs?: number }) =>
+      discoverLatestCursorSession(args.cwd, { minMtimeMs: args.minMtimeMs })
   )
   ipcMain.on('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
     void handleSubscribe(event, args)

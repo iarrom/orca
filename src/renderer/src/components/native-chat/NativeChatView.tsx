@@ -1,3 +1,4 @@
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { cn } from '@/lib/utils'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -12,6 +13,7 @@ import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatC
 import { useNativeChatEditedMessageSend } from './use-native-chat-edited-message-send'
 import { buildNativeChatPaneCaptureHandlers } from './native-chat-pane-capture-handlers'
 import { NativeChatWaitingNotice } from './NativeChatWaitingNotice'
+import { useCursorSessionDiscovery } from './use-cursor-session-discovery'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { useNativeChatFileDrag } from './use-native-chat-file-drag'
 import { NativeChatFileDropOverlay } from './NativeChatFileDropOverlay'
@@ -130,6 +132,14 @@ export default function NativeChatView({
   // paneKey: prefer the live entry's key; fall back to the tab id so the hook
   // still has a stable key to select live status by before any pane reports.
   const paneKey = preferredPaneKey ?? agentStatusEntry?.paneKey ?? `${terminalTabId}:`
+  // [FORK] cursor-agent не шлёт hook-сессию — id транскрипта ищется на диске.
+  const cursorSession = useCursorSessionDiscovery({
+    agent: (agentStatusEntry?.agentType ?? launchAgent ?? resolvedAgent ?? 'claude') as AgentType,
+    terminalTabId,
+    hasSession: Boolean(
+      agentStatusEntry?.providerSession?.id ?? sleepingSession?.providerSession?.id
+    )
+  })
   return (
     <NativeChatSessionGate
       paneKey={paneKey}
@@ -143,8 +153,8 @@ export default function NativeChatView({
         <NativeChatResolvedView
           paneKey={resolution.paneKey}
           agent={resolution.agent}
-          sessionId={resolution.sessionId}
-          transcriptPath={resolution.transcriptPath}
+          sessionId={resolution.sessionId ?? cursorSession?.sessionId ?? null}
+          transcriptPath={resolution.transcriptPath ?? cursorSession?.transcriptPath ?? null}
           targetPtyId={targetPtyId}
           terminalTabId={terminalTabId}
           onSwitchToTerminal={onSwitchToTerminal}
