@@ -191,6 +191,8 @@ const UiUpdate = z
     worktreeCardProperties: WorktreeCardProperties.optional(),
     _worktreeCardModeDefaulted: z.boolean().optional(),
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
+    // [FORK] Cursor-вид сайдбара.
+    sidebarViewMode: z.enum(['workspaces', 'agents']).optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),

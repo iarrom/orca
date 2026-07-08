@@ -5284,6 +5284,9 @@ export class Store {
       agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
         this.state.ui?.agentActivityDisplayMode
       ),
+      // [FORK] Cursor-вид сайдбара переживает перезапуск.
+      sidebarViewMode:
+        this.state.ui?.sidebarViewMode === 'agents' ? ('agents' as const) : ('workspaces' as const),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
@@ -5355,6 +5358,13 @@ export class Store {
         updates.agentActivityDisplayMode !== undefined
           ? normalizeAgentActivityDisplayMode(updates.agentActivityDisplayMode)
           : normalizeAgentActivityDisplayMode(this.state.ui?.agentActivityDisplayMode),
+      // [FORK] Cursor-вид сайдбара.
+      sidebarViewMode:
+        (updates.sidebarViewMode !== undefined
+          ? updates.sidebarViewMode
+          : this.state.ui?.sidebarViewMode) === 'agents'
+          ? ('agents' as const)
+          : ('workspaces' as const),
       workspaceStatuses:
         sanitizedUpdates.workspaceStatuses !== undefined
           ? normalizeWorkspaceStatuses(sanitizedUpdates.workspaceStatuses)
