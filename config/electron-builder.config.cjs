@@ -392,13 +392,11 @@ module.exports = {
   // packages arm64 binaries into the x64 DMG, causing "posix_spawnp failed"
   // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
   // returns false so electron-builder does not rebuild optional cpu-features.
-  npmRebuild: true,
-  publish: {
-    provider: 'github',
-    owner: 'stablyai',
-    repo: 'orca',
-    releaseType: 'release'
-  }
+  npmRebuild: true
+  // [FORK] The updater feed is set once at the top (owner: 'iarrom', repo:
+  // 'tobasco'). Upstream's stablyai/orca publish block was removed here — as a
+  // duplicate key it silently overrode the fork feed, so Tobasco builds pointed
+  // their auto-updater at upstream's releases.
 }
 
 function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
