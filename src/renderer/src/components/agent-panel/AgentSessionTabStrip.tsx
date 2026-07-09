@@ -54,12 +54,13 @@ export function AgentSessionLaunchMenu({
   launchSource?: LaunchSource
 }): React.JSX.Element {
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
-  const { detectedIds } = useDetectedAgents(null)
+  const { detectedIds, isLoading, isRefreshing, refresh } = useDetectedAgents(null)
   const agents = useMemo(
     () => orderTabLaunchAgents(defaultAgent, detectedIds ?? []),
     [defaultAgent, detectedIds]
   )
   const catalog = useMemo(() => getAgentCatalog(), [])
+  const isProbing = isLoading || isRefreshing
 
   const onLaunch = useCallback(
     (agent: TuiAgent) => {
@@ -69,8 +70,22 @@ export function AgentSessionLaunchMenu({
     [launchSource, onBeforeLaunch, worktreeId]
   )
 
+  const onOpenChange = useCallback(
+    (open: boolean) => {
+      // Why: local detection can get stuck empty/null — a cold-start PATH race
+      // or a discarded in-flight probe leaves `detectedAgentIds` set with a
+      // stale cached promise, so `ensureDetectedAgents` never re-probes. Force a
+      // fresh `refresh` (which always re-reads PATH) whenever the user opens an
+      // empty menu so agent selection self-heals instead of staying broken.
+      if (open && agents.length === 0 && !isProbing) {
+        void refresh()
+      }
+    },
+    [agents.length, isProbing, refresh]
+  )
+
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         {agents.length > 0 ? (
@@ -83,7 +98,9 @@ export function AgentSessionLaunchMenu({
             </DropdownMenuItem>
           ))
         ) : (
-          <DropdownMenuItem disabled>Агенты не найдены</DropdownMenuItem>
+          <DropdownMenuItem disabled>
+            {isProbing ? 'Поиск агентов…' : 'Агенты не найдены'}
+          </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

@@ -1,7 +1,7 @@
-// [FORK] Cursor-стиль контекстной шапки чата: «проект ▾  ветка ▾  где ▾».
-// Ветка — поиск по локальным веткам + checkout; «где» — worktree проекта и
-// создание нового. Метка ветки читает worktree.branch, так что смена ветки
-// агентом отражается сама (git-common watcher обновляет store).
+// [FORK] Cursor-стиль контекстная панель над композером: «проект ▾ ветка ▾ где ▾».
+// Всегда интерактивна (как в Cursor): проект — переключение репо, ветка — поиск по
+// локальным веткам + checkout, «где» — worktree проекта и создание нового. Метка
+// ветки читает worktree.branch, так что смена ветки агентом отражается сама.
 import { Check, ChevronDown, GitFork, Monitor } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -53,9 +53,13 @@ function hostLabelFor(hostId: string | undefined, sshTargetLabels: Map<string, s
 }
 
 export function AgentChatContextHeader({
-  worktreeId
+  worktreeId,
+  // [FORK] Fresh agent → editable dropdowns above the composer; once the agent
+  // has started the context is fixed, so it renders as static labels below it.
+  interactive = true
 }: {
   worktreeId: string
+  interactive?: boolean
 }): React.JSX.Element | null {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const repos = useAppStore((s) => s.repos)
@@ -149,8 +153,24 @@ export function AgentChatContextHeader({
     return null
   }
 
-  const visibleWorktrees = repoWorktrees.filter((w) => !w.isArchived)
   const hostLabel = hostLabelFor(worktree.hostId, sshTargetLabels)
+
+  // [FORK] Read-only variant: same project / branch / host, but as plain labels
+  // (no dropdowns) — shown below the composer once the agent is working.
+  if (!interactive) {
+    return (
+      <div className="flex h-7 shrink-0 items-center gap-2 px-1.5 text-xs text-muted-foreground/80">
+        <span className="min-w-0 truncate font-medium text-foreground/80">{repo.displayName}</span>
+        <span className="min-w-0 truncate">{currentBranch ?? 'detached'}</span>
+        <span className="flex min-w-0 items-center gap-1 truncate">
+          <Monitor className="size-3.5 shrink-0 text-muted-foreground/60" />
+          {hostLabel}
+        </span>
+      </div>
+    )
+  }
+
+  const visibleWorktrees = repoWorktrees.filter((w) => !w.isArchived)
   // Why: put the current branch first with its badge (Cursor layout) so the
   // list answers "where am I" before offering alternatives.
   const orderedBranches =
@@ -162,7 +182,9 @@ export function AgentChatContextHeader({
         ]
 
   return (
-    <div className="flex h-7 shrink-0 items-center gap-0.5 border-b border-border bg-card px-1.5">
+    // [FORK] Rendered inside the composer's max-w container (Cursor layout): no
+    // full-width border/bg — the row aligns to the composer box's left edge.
+    <div className="flex h-7 shrink-0 items-center gap-0.5">
       {/* Проект */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

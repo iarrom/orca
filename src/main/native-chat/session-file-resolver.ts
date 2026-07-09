@@ -4,6 +4,7 @@ import { basename, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -178,6 +179,65 @@ export async function discoverLatestCursorSession(
       }
     } catch {
       // не транскрипт-каталог — пропускаем
+    }
+  }
+  return best ? { sessionId: best.sessionId, transcriptPath: best.transcriptPath } : null
+}
+
+// [FORK] Claude encodes each cwd as one `~/.claude/projects/<slug>` dir, slug =
+// the runtime-normalized path with every non-alphanumeric char mapped to '-'.
+// Mirrors ai-vault/session-scanner-scope-discovery's encodeClaudeProjectPath so
+// discovery targets the exact dir Claude writes transcripts into.
+function encodeClaudeProjectSlug(cwd: string): string {
+  return normalizeRuntimePathForComparison(cwd).replace(/[^a-zA-Z0-9]/g, '-')
+}
+
+/**
+ * [FORK] Disk discovery of a Claude session without a live hook binding. The
+ * hook-reported providerSession lives only in renderer memory and is lost on any
+ * reload/dev-restart; an idle agent never re-emits it, so its native chat has no
+ * session id and renders empty even though the transcript is on disk. When no
+ * live/sleeping session resolves, the view falls back to the freshest transcript
+ * (by mtime) in the pane cwd's Claude project dir. `minMtimeMs` (optional) bounds
+ * it to files touched after a reference time. Returns null when none exists.
+ */
+export async function discoverLatestClaudeSession(
+  cwd: string,
+  options: { claudeProjectsDir?: string; minMtimeMs?: number } = {}
+): Promise<{ sessionId: string; transcriptPath: string } | null> {
+  const projectDir = join(
+    options.claudeProjectsDir ?? claudeProjectsDir(),
+    encodeClaudeProjectSlug(cwd)
+  )
+  if (!existsSync(projectDir)) {
+    return null
+  }
+  const { readdir, stat } = await import('node:fs/promises')
+  let entries: string[]
+  try {
+    entries = await readdir(projectDir)
+  } catch {
+    return null
+  }
+  let best: { sessionId: string; transcriptPath: string; mtimeMs: number } | null = null
+  for (const entry of entries) {
+    if (extname(entry) !== '.jsonl') {
+      continue
+    }
+    const transcriptPath = join(projectDir, entry)
+    try {
+      const info = await stat(transcriptPath)
+      if (!info.isFile()) {
+        continue
+      }
+      if (options.minMtimeMs !== undefined && info.mtimeMs < options.minMtimeMs) {
+        continue
+      }
+      if (!best || info.mtimeMs > best.mtimeMs) {
+        best = { sessionId: basename(entry, '.jsonl'), transcriptPath, mtimeMs: info.mtimeMs }
+      }
+    } catch {
+      // Raced deletion / unreadable file — skip it.
     }
   }
   return best ? { sessionId: best.sessionId, transcriptPath: best.transcriptPath } : null

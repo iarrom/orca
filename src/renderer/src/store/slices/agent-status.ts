@@ -1144,9 +1144,18 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           existing?.agentType === identity.agentType &&
           !isAgentCompletionState(existing.state) &&
           !isAgentCompletionState(payload.state)
+        // [FORK] The provider session id identifies the conversation, not the
+        // turn state — a completion tick (done/idle) between turns must not drop
+        // it, or resolveNativeChatSession nulls sessionId and blanks the native
+        // chat to a bare composer until the next turn re-reports. A genuinely new
+        // agent on a reused pane reports its own providerSession via metadata
+        // (which takes precedence here), so carrying the existing id forward
+        // whenever the agent type matches is safe. `existingProviderSession`
+        // below stays on the stricter reuse gate so providerSessionChanged
+        // detection is unchanged.
         const providerSession =
           metadata?.providerSession ??
-          (canReuseExistingIdentity ? existing.providerSession : undefined)
+          (existing?.agentType === identity.agentType ? existing.providerSession : undefined)
         const existingProviderSession = canReuseExistingIdentity
           ? existing.providerSession
           : undefined

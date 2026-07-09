@@ -64,6 +64,39 @@ export function clearPendingSendCacheForTests(): void {
   pendingSendCache.clear()
 }
 
+// [FORK] True when `next` is the resolved paneKey for the placeholder `prev`
+// (`${tabId}:` → `${tabId}:${leafId}`) under the same agent — i.e. the pane a
+// fresh launch registers AFTER the first send, not a pane/agent swap. The
+// placeholder always ends in ':' (empty leaf) and the real key extends it.
+export function isResolvedPaneKeyTransition(
+  prev: NativeChatPendingSendScope,
+  next: NativeChatPendingSendScope
+): boolean {
+  return (
+    prev.agent === next.agent &&
+    prev.paneKey !== next.paneKey &&
+    prev.paneKey.endsWith(':') &&
+    next.paneKey.startsWith(prev.paneKey)
+  )
+}
+
+// [FORK] Carry a pending queue from one scope to another (appending to any
+// entries already at the destination). Used when the placeholder paneKey
+// resolves to the real pane after the first send: without this the optimistic
+// echo is stranded under the old key and the chat flashes empty until the
+// transcript user turn lands.
+export function migratePendingSendCache(
+  from: NativeChatPendingSendScope,
+  to: NativeChatPendingSendScope
+): NativeChatPendingSend[] {
+  const carried = readPendingSendCache(from)
+  if (carried.length === 0) {
+    return readPendingSendCache(to)
+  }
+  writePendingSendCache(from, [])
+  return writePendingSendCache(to, [...readPendingSendCache(to), ...carried])
+}
+
 function normalize(text: string): string {
   return stripImagePromptMarker(text).trim().replace(/\s+/g, ' ')
 }

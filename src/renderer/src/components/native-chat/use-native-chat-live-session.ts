@@ -135,6 +135,15 @@ export function useNativeChatLiveSession(
 
   const latestSessionId = useRef<string | null>(sessionId)
   latestSessionId.current = sessionId
+  // [FORK] Whether a real session has already loaded for this pane. A status
+  // tick that momentarily drops providerSession (or a resolution flap between
+  // turns) briefly nulls sessionId; without this guard the effect below would
+  // wipe the loaded transcript and blank the chat to a bare composer. Reset when
+  // the pane/agent identity changes so a different pane never inherits it.
+  const hasLoadedSessionRef = useRef(false)
+  useEffect(() => {
+    hasLoadedSessionRef.current = false
+  }, [paneKey, agent])
   // Tracks the current owner's transport so a load-earlier resolve from a prior
   // host is discarded after an owner flip (the session id can stay the same).
   const latestTransport = useRef(transport)
@@ -151,6 +160,15 @@ export function useNativeChatLiveSession(
 
   useEffect(() => {
     if (!sessionId) {
+      // [FORK] Keep the last-loaded transcript frozen when sessionId only
+      // momentarily drops to null (a status tick that lost providerSession, a
+      // resolution flap between turns). Wiping here blanks the chat to a bare
+      // composer even though the conversation is intact; the id returns with the
+      // same value within a tick, and a genuine session swap re-reads via the id
+      // change below. Only reset when no session ever loaded for this pane.
+      if (hasLoadedSessionRef.current) {
+        return
+      }
       // No session id yet: nothing to read or tail. Surface live hook state on
       // an empty transcript; backfills once the id arrives (effect re-runs).
       setRead({ phase: 'ready', messages: [] })
@@ -179,6 +197,9 @@ export function useNativeChatLiveSession(
         }
         const messages = result?.messages ?? []
         setRead({ phase: 'ready', messages })
+        // [FORK] Mark a real session as loaded so a later transient null
+        // sessionId keeps this transcript instead of blanking to empty.
+        hasLoadedSessionRef.current = true
         setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
       })
       .catch((err: unknown) => {

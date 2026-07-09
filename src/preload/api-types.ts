@@ -794,6 +794,13 @@ export type NativeChatApi = {
     cwd: string,
     minMtimeMs?: number
   ) => Promise<{ sessionId: string; transcriptPath: string } | null>
+  /** [FORK] Newest Claude session for a project cwd — disk fallback used when the
+   *  live hook providerSession was lost (reload/dev-restart) and an idle agent
+   *  never re-emits it, so the native chat can still find its transcript. */
+  discoverClaudeSession: (
+    cwd: string,
+    minMtimeMs?: number
+  ) => Promise<{ sessionId: string; transcriptPath: string } | null>
   /** Live-tail a transcript: `onAppended` fires with only newly-appended
    *  messages. Returns an unsubscribe fn that closes the main-process watcher. */
   subscribe: (

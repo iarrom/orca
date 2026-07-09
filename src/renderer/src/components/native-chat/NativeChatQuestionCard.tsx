@@ -203,8 +203,8 @@ export function NativeChatQuestionCard({
                 onClick={advance}
                 disabled={!currentAnswered}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-colors',
-                  'hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50'
+                  'flex items-center gap-1.5 rounded-md bg-question-accent px-3 py-1.5 text-sm font-semibold text-question-accent-foreground transition-colors',
+                  'hover:bg-question-accent/90 disabled:pointer-events-none disabled:opacity-50'
                 )}
               >
                 {translate('components.native-chat.question.next', 'Next')}
@@ -237,13 +237,15 @@ function OptionRow({
       onClick={onSelect}
       className={cn(
         'flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left transition-colors',
-        selected ? 'bg-accent' : 'hover:bg-accent/50'
+        selected ? 'bg-question-accent/10' : 'hover:bg-accent/50'
       )}
     >
       <span
         className={cn(
           'flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-medium transition-colors',
-          selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+          selected
+            ? 'bg-question-accent text-question-accent-foreground'
+            : 'bg-muted text-muted-foreground'
         )}
       >
         {letter}

@@ -3688,6 +3688,12 @@ const api = {
       minMtimeMs?: number
     ): Promise<{ sessionId: string; transcriptPath: string } | null> =>
       ipcRenderer.invoke('nativeChat:discoverCursorSession', { cwd, minMtimeMs }),
+    // [FORK] Дискавери claude-сессии по cwd (фолбэк при потере живого биндинга).
+    discoverClaudeSession: (
+      cwd: string,
+      minMtimeMs?: number
+    ): Promise<{ sessionId: string; transcriptPath: string } | null> =>
+      ipcRenderer.invoke('nativeChat:discoverClaudeSession', { cwd, minMtimeMs }),
     subscribe: (
       args: {
         subscriptionId: string

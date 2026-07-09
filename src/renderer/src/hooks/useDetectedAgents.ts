@@ -124,11 +124,25 @@ export function useDetectedAgents(
         void ensureRuntime(targetId)
       }
     } else {
-      if (detectedIds === null) {
+      // Why: re-trigger whenever detection is null AND nothing is in flight.
+      // A clearLocalDetectedAgents() that lands mid-probe discards the result
+      // and leaves detectedIds=null with no state change to re-fire this effect,
+      // so agent lists stay empty forever. Gating on !isLoading (rather than the
+      // value alone) lets the isDetecting true→false edge re-run us and recover.
+      if (detectedIds === null && !isLoading) {
         void ensureLocal()
       }
     }
-  }, [isUnknown, targetKind, targetId, detectedIds, ensureLocal, ensureRemote, ensureRuntime])
+  }, [
+    isUnknown,
+    targetKind,
+    targetId,
+    detectedIds,
+    isLoading,
+    ensureLocal,
+    ensureRemote,
+    ensureRuntime
+  ])
 
   return { detectedIds, isLoading, isRefreshing, refresh }
 }

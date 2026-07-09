@@ -10,7 +10,9 @@ import {
   isCommandMarkerId,
   isLaunchPromptMessageId,
   isPendingMessageId,
+  isResolvedPaneKeyTransition,
   launchPromptAsMessage,
+  migratePendingSendCache,
   pendingSendsAsMessages,
   prunePendingSends,
   readCommandMarkerCache,
@@ -238,6 +240,69 @@ describe('pending send cache', () => {
     writePendingSendCache(scope, [])
 
     expect(readPendingSendCache(scope)).toEqual([])
+  })
+})
+
+describe('isResolvedPaneKeyTransition', () => {
+  it('is true when a placeholder paneKey resolves to its real pane', () => {
+    expect(
+      isResolvedPaneKeyTransition(
+        { paneKey: 'tab-a:', agent: 'claude' },
+        { paneKey: 'tab-a:leaf-a', agent: 'claude' }
+      )
+    ).toBe(true)
+  })
+
+  it('is false when the agent changes (genuine swap)', () => {
+    expect(
+      isResolvedPaneKeyTransition(
+        { paneKey: 'tab-a:', agent: 'claude' },
+        { paneKey: 'tab-a:leaf-a', agent: 'codex' }
+      )
+    ).toBe(false)
+  })
+
+  it('is false for two distinct real panes (not a placeholder resolve)', () => {
+    expect(
+      isResolvedPaneKeyTransition(
+        { paneKey: 'tab-a:leaf-a', agent: 'claude' },
+        { paneKey: 'tab-a:leaf-b', agent: 'claude' }
+      )
+    ).toBe(false)
+  })
+
+  it('is false when the resolved key belongs to a different tab', () => {
+    expect(
+      isResolvedPaneKeyTransition(
+        { paneKey: 'tab-a:', agent: 'claude' },
+        { paneKey: 'tab-b:leaf-a', agent: 'claude' }
+      )
+    ).toBe(false)
+  })
+})
+
+describe('migratePendingSendCache', () => {
+  it('carries the optimistic echo from the placeholder scope to the real pane', () => {
+    clearPendingSendCacheForTests()
+    const from = { paneKey: 'tab-a:', agent: 'claude' }
+    const to = { paneKey: 'tab-a:leaf-a', agent: 'claude' }
+    appendPendingSendCache(from, pendingOf('p1', 'explore the task'))
+
+    const migrated = migratePendingSendCache(from, to)
+
+    expect(migrated).toEqual([pendingOf('p1', 'explore the task')])
+    expect(readPendingSendCache(to)).toEqual([pendingOf('p1', 'explore the task')])
+    // The stranded placeholder entry is drained so it can't reappear.
+    expect(readPendingSendCache(from)).toEqual([])
+  })
+
+  it('returns the destination queue unchanged when nothing to carry', () => {
+    clearPendingSendCacheForTests()
+    const from = { paneKey: 'tab-a:', agent: 'claude' }
+    const to = { paneKey: 'tab-a:leaf-a', agent: 'claude' }
+    appendPendingSendCache(to, pendingOf('p9', 'already here'))
+
+    expect(migratePendingSendCache(from, to)).toEqual([pendingOf('p9', 'already here')])
   })
 })
 

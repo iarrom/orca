@@ -21,6 +21,10 @@ export type UseNativeChatComposerKeyDownArgs = {
   chooseSlashItem: (item: UniversalSlashItem, intent: UniversalSlashChooseIntent) => void
   interrupt: () => void
   send: () => void
+  /** [FORK] Whether this agent supports plan mode — gates the Shift+Tab chord. */
+  supportsPlanMode: boolean
+  /** [FORK] Toggle plan mode (Cursor's Shift+Tab "Plan New Idea"). */
+  togglePlanMode: () => void
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   setDraft: Dispatch<SetStateAction<string>>
   setCaret: Dispatch<SetStateAction<number>>
@@ -37,6 +41,8 @@ export function useNativeChatComposerKeyDown({
   chooseSlashItem,
   interrupt,
   send,
+  supportsPlanMode,
+  togglePlanMode,
   setActiveSuggestion,
   setDraft,
   setCaret,
@@ -44,6 +50,14 @@ export function useNativeChatComposerKeyDown({
 }: UseNativeChatComposerKeyDownArgs): KeyboardEventHandler<HTMLTextAreaElement> {
   return useCallback(
     (event) => {
+      // [FORK] Shift+Tab toggles plan mode (Cursor's "Plan New Idea" chord).
+      // Checked before the slash menu's plain-Tab handler so it always wins.
+      if (event.key === 'Tab' && event.shiftKey && supportsPlanMode) {
+        event.preventDefault()
+        togglePlanMode()
+        return
+      }
+
       // [FORK] The universal `/` menu navigates one flat index across its
       // Skills / Commands / Modes sections. Enter submits (commands dispatch to
       // the TUI, skills insert, modes toggle); Tab inserts without submitting.
@@ -142,6 +156,8 @@ export function useNativeChatComposerKeyDown({
       chooseSlashItem,
       interrupt,
       send,
+      supportsPlanMode,
+      togglePlanMode,
       draft,
       caret,
       history,

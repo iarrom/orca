@@ -17,8 +17,7 @@ import {
   Minimize2,
   MoreHorizontal,
   PanelLeft,
-  PanelRight,
-  Search
+  PanelRight
 } from 'lucide-react'
 import logo from '../../../resources/logo.svg'
 import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
@@ -2023,23 +2022,6 @@ function App(): React.JSX.Element {
               {translate('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
                 value0: leftSidebarShortcutLabel
               })}
-            </TooltipContent>
-          </Tooltip>
-        )}
-        {/* [FORK] Поиск воркспейсов/вкладок иконкой рядом с тогглом (как в Cursor). */}
-        {showSidebar && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="sidebar-toggle"
-                onClick={() => actions.openModal('worktree-palette')}
-                aria-label={translate('auto.components.sidebar.SidebarNav.80611a8b10', 'Search')}
-              >
-                <Search size={16} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.sidebar.SidebarNav.80611a8b10', 'Search')}
             </TooltipContent>
           </Tooltip>
         )}

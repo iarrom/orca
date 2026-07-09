@@ -604,6 +604,14 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
+  /** [FORK] Явная пометка «непрочитано» из контекстного меню строки агента.
+   *  В отличие от ack-таймстампа, показывает оранжевый кружок независимо от
+   *  состояния агента (в т.ч. working) и не сбрасывается авто-ack'ом активного
+   *  пейна — снимается только открытием агента или «Mark as Read». Эфемерна,
+   *  как и сам agentStatus (переживать перезапуск не обязана). */
+  manuallyUnreadAgentPaneKeys: Record<string, true>
+  markAgentsUnread: (paneKeys: string[]) => void
+  clearAgentsManualUnread: (paneKeys: string[]) => void
   activeView:
     | 'terminal'
     | 'settings'
@@ -1130,6 +1138,33 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   },
 
   acknowledgedAgentsByPaneKey: {},
+  manuallyUnreadAgentPaneKeys: {},
+  markAgentsUnread: (paneKeys) =>
+    set((s) => {
+      let next: Record<string, true> | null = null
+      for (const key of paneKeys) {
+        if (!s.manuallyUnreadAgentPaneKeys[key]) {
+          if (next === null) {
+            next = { ...s.manuallyUnreadAgentPaneKeys }
+          }
+          next[key] = true
+        }
+      }
+      return next ? { manuallyUnreadAgentPaneKeys: next } : s
+    }),
+  clearAgentsManualUnread: (paneKeys) =>
+    set((s) => {
+      let next: Record<string, true> | null = null
+      for (const key of paneKeys) {
+        if (s.manuallyUnreadAgentPaneKeys[key]) {
+          if (next === null) {
+            next = { ...s.manuallyUnreadAgentPaneKeys }
+          }
+          delete next[key]
+        }
+      }
+      return next ? { manuallyUnreadAgentPaneKeys: next } : s
+    }),
   acknowledgeAgents: (paneKeys) => {
     const notificationIdsToDismiss = new Set<string>()
     set((s) => {

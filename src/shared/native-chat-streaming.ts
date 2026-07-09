@@ -4,11 +4,20 @@
 // completed turn is flushed to the transcript. Desktop and mobile both use this
 // so the show/hide rule can't drift between platforms.
 
-import type { NativeChatMessage } from './native-chat-types'
+import type { AgentType, NativeChatMessage } from './native-chat-types'
 
 /** The synthetic streaming bubble's stable id (kept stable so the list keys it
  *  consistently across ticks and the real turn can replace it cleanly). */
 export const NATIVE_CHAT_STREAMING_ID = 'streaming'
+
+// [FORK] Agents whose live `lastAssistantMessage` carries TOOL ACTIVITY, not
+// assistant prose, while working. Claude's hook feeds every PostToolUse /
+// PostToolUseFailure text into that field (tool output, "File does not exist…"),
+// so synthesizing a prose bubble from it streams raw tool results into the chat.
+// Real prose only lands at Stop (working already false), and incremental output
+// arrives via the transcript tail — so the synthetic bubble is pure noise here
+// and is suppressed. Agents that stream genuine partial prose keep it.
+const AGENTS_WITHOUT_PROSE_PREVIEW: ReadonlySet<AgentType> = new Set(['claude'])
 
 /** Concatenated text of an assistant message's text blocks, trimmed. */
 function assistantText(message: NativeChatMessage | undefined): string {
@@ -35,9 +44,15 @@ export function deriveNativeChatStreamingText(args: {
   messages: readonly NativeChatMessage[]
   previewText: string | null | undefined
   working: boolean
+  /** The pane's agent; agents whose preview is tool activity get no bubble. */
+  agent: AgentType
 }): string | null {
-  const { messages, previewText, working } = args
+  const { messages, previewText, working, agent } = args
   if (!working) {
+    return null
+  }
+  // [FORK] Skip agents whose `lastAssistantMessage` is tool output, not prose.
+  if (AGENTS_WITHOUT_PROSE_PREVIEW.has(agent)) {
     return null
   }
   const text = previewText?.trim()

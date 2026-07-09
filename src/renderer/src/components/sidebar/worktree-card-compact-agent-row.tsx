@@ -39,14 +39,20 @@ function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
   return null
 }
 
-function getCompactAgentPrimary(agent: DashboardAgentRowData): string {
+export function getCompactAgentPrimary(agent: DashboardAgentRowData): string {
+  // [FORK] Ручное имя (Rename в контекстном меню) перекрывает автозаголовок из
+  // промпта — иначе переименование было бы не видно на строках с промптом.
+  const custom = agent.tab.customTitle?.trim()
+  if (custom) {
+    return custom
+  }
   const prompt = getAgentRowPrimaryText(agent.entry)
   if (prompt) {
     return prompt
   }
   // [FORK] Черновик нового чата без промпта читается именем таба (как в
   // панели), а не словом состояния.
-  const tabLabel = agent.tab.customTitle ?? agent.tab.generatedTitle ?? agent.tab.title
+  const tabLabel = agent.tab.generatedTitle ?? agent.tab.title
   return tabLabel || agentStateLabel(getAgentDotState(agent))
 }
 
@@ -105,6 +111,9 @@ type CompactAgentRowProps = {
   className?: string
   /** [FORK] Непрочитанность строки — для янтарного кружка завершённой работы. */
   isUnvisited?: boolean
+  /** [FORK] Явная пометка «непрочитано» (Mark as Unread): янтарный кружок
+   *  независимо от состояния агента, в т.ч. пока он работает. */
+  forceUnread?: boolean
   /** [FORK] Hover-действия строки: пин (закрепить сверху) и архив (закрыть). */
   isPinned?: boolean
   onTogglePin?: () => void
@@ -128,6 +137,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   hideSecondaryText = false,
   className,
   isUnvisited = false,
+  forceUnread = false,
   isPinned = false,
   onTogglePin,
   onArchive,
@@ -139,11 +149,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     typeof onToggleChildAgents === 'function'
   const dotState = getAgentDotState(agent)
   const chatStarted = getAgentRowPrimaryText(agent.entry).length > 0
-  const rowIndicator = !chatStarted
-    ? ('draft' as const)
-    : isUnvisited && (dotState === 'done' || dotState === 'idle')
-      ? ('unread-done' as const)
-      : null
+  const rowIndicator = forceUnread
+    ? ('unread-done' as const)
+    : dotState === 'working'
+      ? ('working' as const)
+      : !chatStarted
+        ? ('draft' as const)
+        : isUnvisited && (dotState === 'done' || dotState === 'idle')
+          ? ('unread-done' as const)
+          : null
   const primary = getCompactAgentPrimary(agent)
   const isLineageChild = agent.lineage?.depth === 1
   const secondary = getCompactAgentSecondary(agent)
@@ -221,7 +235,10 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           прочитано. Слот фиксированной ширины — небольшой внутренний отступ
           строки, куда кружок встаёт, не сдвигая текст. */}
       <span className="flex w-2.5 shrink-0 items-center justify-center" aria-hidden>
-        {rowIndicator === 'draft' ? (
+        {rowIndicator === 'working' ? (
+          // [FORK] Agent is actively working — slow-blinking gray dot.
+          <span className="size-1.5 animate-agent-working-blink rounded-full bg-muted-foreground/70" />
+        ) : rowIndicator === 'draft' ? (
           <span className="size-1.5 rounded-full bg-muted-foreground/40" />
         ) : rowIndicator === 'unread-done' ? (
           <span className="size-1.5 rounded-full bg-amber-500" />

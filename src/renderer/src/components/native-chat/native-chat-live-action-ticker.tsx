@@ -74,6 +74,35 @@ export function deriveCurrentLiveAction(
   return null
 }
 
+/** One chunk of assistant prose the agent streamed mid-turn. */
+export type NativeChatLiveProse = { id: string; markdown: string }
+
+/** Assistant prose streamed mid-turn (intermediate results), in order. Reasoning
+ *  is excluded — it surfaces through the thought ticker — and tool blocks are
+ *  dropped; only the agent's spoken text is returned. Empty prose is skipped.
+ *  Claude writes these as real transcript assistant messages between tool calls,
+ *  so they must render live (the `lastAssistantMessage` bubble is off for Claude,
+ *  where that field carries tool output, not prose). Exported for tests. */
+export function deriveLiveProseMessages(
+  steps: readonly NativeChatMessage[]
+): NativeChatLiveProse[] {
+  const out: NativeChatLiveProse[] = []
+  for (const message of steps) {
+    if (message.role === 'reasoning') {
+      continue
+    }
+    const markdown = splitNativeChatBlocks(message.blocks)
+      .prose.filter(isTextBlock)
+      .map((block) => block.text)
+      .join('\n\n')
+      .trim()
+    if (markdown) {
+      out.push({ id: message.id, markdown })
+    }
+  }
+  return out
+}
+
 function LiveActionRow({
   action,
   active,

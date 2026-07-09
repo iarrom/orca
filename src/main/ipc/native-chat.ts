@@ -9,8 +9,12 @@ import {
   subscribeNativeChatTranscript,
   type NativeChatTranscriptSubscription
 } from '../native-chat/transcript-watch'
-// [FORK] Дискавери cursor-сессии по cwd (у cursor-agent нет hook-реле).
-import { discoverLatestCursorSession } from '../native-chat/session-file-resolver'
+// [FORK] Дискавери сессии по cwd: cursor не имеет hook-реле, а у claude живой
+// hook-биндинг теряется при reload — оба фолбэчатся на транскрипт с диска.
+import {
+  discoverLatestClaudeSession,
+  discoverLatestCursorSession
+} from '../native-chat/session-file-resolver'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -166,6 +170,13 @@ export function registerNativeChatHandlers(): void {
     'nativeChat:discoverCursorSession',
     (_event, args: { cwd: string; minMtimeMs?: number }) =>
       discoverLatestCursorSession(args.cwd, { minMtimeMs: args.minMtimeMs })
+  )
+  // [FORK] claude: тот же дисковый фолбэк, когда живой providerSession потерян
+  // (reload/dev-restart) и idle-агент не пингует хуками заново.
+  ipcMain.handle(
+    'nativeChat:discoverClaudeSession',
+    (_event, args: { cwd: string; minMtimeMs?: number }) =>
+      discoverLatestClaudeSession(args.cwd, { minMtimeMs: args.minMtimeMs })
   )
   ipcMain.on('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
     void handleSubscribe(event, args)

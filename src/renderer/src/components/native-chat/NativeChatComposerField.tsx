@@ -15,6 +15,10 @@ import { NativeChatUniversalSlashMenu } from './NativeChatUniversalSlashMenu'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import { NativeChatAttachmentThumbnails } from './NativeChatAttachmentThumbnails'
 import { nativeChatComposerPlaceholder } from './native-chat-composer-target'
+// [FORK] Cursor-style chrome around the composer box: context bar above, "Plan
+// New Idea" button below — both aligned to the box via the shared max-w container.
+import AgentChatContextHeader from './AgentChatContextHeader'
+import { NativeChatPlanNewIdeaButton } from './NativeChatPlanNewIdeaButton'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 // [FORK] Чипы пастнутых дампов элементов в композере.
 import type { PastedElementDump } from './native-chat-prompt-tokens'
@@ -47,6 +51,15 @@ export type NativeChatComposerFieldProps = {
   planPill?: React.ReactNode
   /** [FORK] Overrides the textarea placeholder (e.g. plan-mode prompt hint). */
   placeholder?: string
+  /** [FORK] When set, renders the Cursor-style project/branch/host bar. Fresh
+   *  chat → editable, above the box; once the agent works → static, below it. */
+  footerWorktreeId?: string | null
+  /** [FORK] True for a brand-new empty chat (drives header position + the button). */
+  isFreshChat?: boolean
+  /** [FORK] "Plan New Idea" button under the box — shown only for a fresh chat
+   *  with plan mode off (the composer's own Plan pill covers the on-state). */
+  showPlanNewIdeaButton?: boolean
+  onTogglePlanMode?: () => void
   onDraftChange: (value: string, element: HTMLTextAreaElement) => void
   onTextareaSelect: (element: HTMLTextAreaElement) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
@@ -92,6 +105,10 @@ export function NativeChatComposerField({
   addMenu,
   planPill,
   placeholder,
+  footerWorktreeId,
+  isFreshChat,
+  showPlanNewIdeaButton,
+  onTogglePlanMode,
   onDraftChange,
   onTextareaSelect,
   onKeyDown,
@@ -127,108 +144,130 @@ export function NativeChatComposerField({
   return (
     <div className="shrink-0 bg-background">
       <div className="px-3 py-2 sm:px-4">
-        {/* [FORK] Уже композер (max-w-xl вместо 3xl) — компактнее, как в Cursor. */}
-        <div className="relative mx-auto w-full max-w-xl">
-          {autocomplete.mode === 'slash' && slashItems.length > 0 ? (
-            <NativeChatUniversalSlashMenu
-              items={slashItems}
-              activeIndex={activeSuggestion}
-              onChoose={onChooseSlashItem}
-            />
-          ) : null}
-          {autocomplete.mode === 'mention' ? (
-            <NativeChatMentionHint query={autocomplete.query} onAccept={onAcceptMention} />
-          ) : null}
-          {autocomplete.mode === 'skill' ? (
-            <NativeChatSkillMenu
-              suggestions={autocomplete.suggestions}
-              activeIndex={activeSuggestion}
-              onChoose={onChooseSkill}
-            />
-          ) : null}
-          {notice ? (
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ImageOff className="size-3.5 shrink-0" />
-              <span>{notice}</span>
+        {/* [FORK] Уже композер (max-w-xl вместо 3xl) — компактнее, как в Cursor.
+          Контекстная панель и футер-кнопки живут внутри того же max-w-контейнера,
+          так что выровнены по краям композера (Cursor 1-в-1). */}
+        <div className="mx-auto w-full max-w-xl">
+          {/* Fresh chat: editable context header above the box (Cursor layout). */}
+          {footerWorktreeId && isFreshChat ? (
+            <div className="mb-1">
+              <AgentChatContextHeader worktreeId={footerWorktreeId} />
             </div>
           ) : null}
-          <div
-            data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
-            className={cn(
-              'rounded-xl border border-input bg-card p-1.5 shadow-xs transition-colors',
-              // [FORK] Убрали focus-ring/border на композере чата — лишняя подсветка отвлекает.
-              'dark:bg-input/30'
-            )}
-          >
-            <NativeChatAttachmentThumbnails
-              attachments={imageAttachments}
-              onRemove={onRemoveImageAttachment}
-            />
-            {/* [FORK] Чипы дампов элементов: как в отправленном сообщении —
-              link-blue, имя файла компонента, × убирает чип. */}
-            {elementAttachments && elementAttachments.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1 px-2 pt-1">
-                {elementAttachments.map((dump, index) => (
-                  <span
-                    key={`${dump.label}-${index}`}
-                    title={dump.text.slice(0, 400)}
-                    className="inline-flex max-w-48 items-center gap-1 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-xs text-blue-500 dark:text-blue-400"
-                  >
-                    <span className="truncate">{dump.label}</span>
-                    {onRemoveElementAttachment ? (
-                      <button
-                        type="button"
-                        aria-label="Убрать элемент"
-                        className="shrink-0 rounded-sm opacity-60 hover:opacity-100"
-                        onClick={() => onRemoveElementAttachment(index)}
-                      >
-                        <X className="size-3" />
-                      </button>
-                    ) : null}
-                  </span>
-                ))}
+          <div className="relative">
+            {autocomplete.mode === 'slash' && slashItems.length > 0 ? (
+              <NativeChatUniversalSlashMenu
+                items={slashItems}
+                activeIndex={activeSuggestion}
+                onChoose={onChooseSlashItem}
+              />
+            ) : null}
+            {autocomplete.mode === 'mention' ? (
+              <NativeChatMentionHint query={autocomplete.query} onAccept={onAcceptMention} />
+            ) : null}
+            {autocomplete.mode === 'skill' ? (
+              <NativeChatSkillMenu
+                suggestions={autocomplete.suggestions}
+                activeIndex={activeSuggestion}
+                onChoose={onChooseSkill}
+              />
+            ) : null}
+            {notice ? (
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <ImageOff className="size-3.5 shrink-0" />
+                <span>{notice}</span>
               </div>
             ) : null}
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              disabled={disabled}
-              rows={2}
-              onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
-              onKeyDown={onKeyDown}
-              onPaste={onPaste}
-              onSelect={(e) => onTextareaSelect(e.currentTarget)}
-              placeholder={placeholder ?? nativeChatComposerPlaceholder(hasPty, canSend)}
-              // Why: coarse-pointer min-height follows the app's touch target convention.
-              // scrollbar-sleek keeps the overflow gutter from showing the heavy
-              // native scrollbar once the draft exceeds max-height.
-              // field-sizing-content grows the textarea with the draft between
-              // min-h/max-h (auto-resize without JS), then scrolls past max-h.
+            <div
+              data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
               className={cn(
-                'scrollbar-sleek field-sizing-content min-h-12 max-h-64 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
-                'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
+                'rounded-xl border border-input bg-card p-1.5 shadow-xs transition-colors',
+                // [FORK] Убрали focus-ring/border на композере чата — лишняя подсветка отвлекает.
+                'dark:bg-input/30'
               )}
-            />
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              <NativeChatComposerActions
-                attachDisabled={attachDisabled}
-                dictationDisabled={dictationDisabled}
-                sendDisabled={sendButtonDisabled}
-                isWorking={isWorking}
-                isDictating={isDictating}
-                isDictationHoldMode={isDictationHoldMode}
-                modelPicker={modelPicker}
-                addMenu={addMenu}
-                planPill={planPill}
-                onAttach={onAttach}
-                onDictationToggle={onDictationToggle}
-                onDictationHoldStart={onDictationHoldStart}
-                onDictationHoldEnd={onDictationHoldEnd}
-                onSend={onSend}
-                onStop={onStop}
+            >
+              <NativeChatAttachmentThumbnails
+                attachments={imageAttachments}
+                onRemove={onRemoveImageAttachment}
               />
+              {/* [FORK] Чипы дампов элементов: как в отправленном сообщении —
+              link-blue, имя файла компонента, × убирает чип. */}
+              {elementAttachments && elementAttachments.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1 px-2 pt-1">
+                  {elementAttachments.map((dump, index) => (
+                    <span
+                      key={`${dump.label}-${index}`}
+                      title={dump.text.slice(0, 400)}
+                      className="inline-flex max-w-48 items-center gap-1 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-xs text-blue-500 dark:text-blue-400"
+                    >
+                      <span className="truncate">{dump.label}</span>
+                      {onRemoveElementAttachment ? (
+                        <button
+                          type="button"
+                          aria-label="Убрать элемент"
+                          className="shrink-0 rounded-sm opacity-60 hover:opacity-100"
+                          onClick={() => onRemoveElementAttachment(index)}
+                        >
+                          <X className="size-3" />
+                        </button>
+                      ) : null}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                disabled={disabled}
+                rows={2}
+                onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
+                onKeyDown={onKeyDown}
+                onPaste={onPaste}
+                onSelect={(e) => onTextareaSelect(e.currentTarget)}
+                placeholder={placeholder ?? nativeChatComposerPlaceholder(hasPty, canSend)}
+                // Why: coarse-pointer min-height follows the app's touch target convention.
+                // scrollbar-sleek keeps the overflow gutter from showing the heavy
+                // native scrollbar once the draft exceeds max-height.
+                // field-sizing-content grows the textarea with the draft between
+                // min-h/max-h (auto-resize without JS), then scrolls past max-h.
+                className={cn(
+                  'scrollbar-sleek field-sizing-content min-h-12 max-h-64 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                  'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
+                )}
+              />
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                <NativeChatComposerActions
+                  attachDisabled={attachDisabled}
+                  dictationDisabled={dictationDisabled}
+                  sendDisabled={sendButtonDisabled}
+                  isWorking={isWorking}
+                  isDictating={isDictating}
+                  isDictationHoldMode={isDictationHoldMode}
+                  modelPicker={modelPicker}
+                  addMenu={addMenu}
+                  planPill={planPill}
+                  onAttach={onAttach}
+                  onDictationToggle={onDictationToggle}
+                  onDictationHoldStart={onDictationHoldStart}
+                  onDictationHoldEnd={onDictationHoldEnd}
+                  onSend={onSend}
+                  onStop={onStop}
+                />
+              </div>
             </div>
           </div>
+          {/* Fresh chat: "Plan New Idea" button below the box. */}
+          {showPlanNewIdeaButton && onTogglePlanMode ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <NativeChatPlanNewIdeaButton onToggle={onTogglePlanMode} disabled={disabled} />
+            </div>
+          ) : null}
+          {/* Agent working: the now-fixed context sits below the box, read-only. */}
+          {footerWorktreeId && !isFreshChat ? (
+            <div className="mt-2">
+              <AgentChatContextHeader worktreeId={footerWorktreeId} interactive={false} />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

@@ -7,13 +7,16 @@
 // answer reads full-strength.
 import { useMemo, useState } from 'react'
 import { ChevronDown, SquareChevronRight } from 'lucide-react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown, {
+  type CommentMarkdownLinkClickHandler
+} from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
 import { formatWorkedDuration } from './native-chat-turn-groups'
 import {
   deriveCurrentLiveAction,
+  deriveLiveProseMessages,
   NativeChatLiveActionTicker
 } from './native-chat-live-action-ticker'
 
@@ -41,10 +44,24 @@ export function NativeChatWorkGroup({
   const [open, setOpen] = useState(false)
   // Live: только текущее действие одной строкой (см. комментарий модуля).
   const liveAction = useMemo(() => (live ? deriveCurrentLiveAction(steps) : null), [live, steps])
+  // [FORK] Промежуточная проза, которую агент стримит между вызовами инструментов
+  // (Claude пишет её отдельными assistant-сообщениями в транскрипт). Рендерим её
+  // инлайн над тикером текущего действия — иначе результаты видны только в конце.
+  const liveProse = useMemo(() => (live ? deriveLiveProseMessages(steps) : []), [live, steps])
 
   if (live) {
     return (
       <div className="opacity-80">
+        {liveProse.map((prose) => (
+          <CommentMarkdown
+            key={prose.id}
+            content={prose.markdown}
+            variant="document"
+            className="mb-1 text-sm leading-relaxed text-foreground"
+            onLinkClick={onLinkClick}
+            allowFileUriLinks={allowFileUriLinks}
+          />
+        ))}
         <NativeChatLiveActionTicker
           action={liveAction}
           onLinkClick={onLinkClick}

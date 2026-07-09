@@ -28,6 +28,7 @@ export function computeAutoAckTargets(
     agentStatusByPaneKey: Record<string, AgentStatusEntry>
     retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
     acknowledgedAgentsByPaneKey: Record<string, number>
+    manuallyUnreadAgentPaneKeys?: Record<string, true>
   },
   activeTabId: string,
   activeLeafId: string | null
@@ -36,6 +37,12 @@ export function computeAutoAckTargets(
     return []
   }
   const targetKey = makePaneKey(activeTabId, activeLeafId)
+  // Why: an explicit "Mark as Unread" must survive focus-return auto-ack —
+  // otherwise the dot clears the instant the user is on that pane. Cleared only
+  // by opening the agent (activateWorktreeAgentRowTab) or "Mark as Read".
+  if (state.manuallyUnreadAgentPaneKeys?.[targetKey]) {
+    return []
+  }
   const targets: string[] = []
   const liveEntry = state.agentStatusByPaneKey[targetKey]
   if (liveEntry) {

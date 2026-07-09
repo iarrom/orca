@@ -4,7 +4,7 @@
 // outgoing-prompt wrapper — all from the per-tab plan-mode state. Kept out of
 // NativeChatComposer so that file stays within the max-lines budget.
 
-import { ListChecks } from 'lucide-react'
+import { ListChecks, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatPlanModeState } from './use-native-chat-plan-mode'
 import { wrapNativeChatPlanPrompt } from './native-chat-plan-instruction'
@@ -35,15 +35,18 @@ export function useNativeChatPlanComposer(params: {
     supportsPlanMode,
     planMode,
     togglePlanMode,
+    // Amber pill shown while plan mode is active; the whole pill (incl. the ×)
+    // turns plan off. Background is amber by default and unchanged on hover.
     planPill: planMode ? (
       <button
         type="button"
         onClick={togglePlanMode}
         aria-label={translate('components.native-chat.composer.planMode.disable', 'Turn off Plan')}
-        className="flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-warning outline-none transition-colors hover:bg-warning/10 focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
+        className="flex h-7 items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2.5 text-xs font-medium text-warning outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
       >
         <ListChecks className="size-3.5" />
         <span>{translate('components.native-chat.composer.planMode.active', 'Plan')}</span>
+        <X className="size-3.5 opacity-70" />
       </button>
     ) : null,
     placeholder: planMode

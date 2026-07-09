@@ -24,16 +24,31 @@ const user = (text: string): NativeChatMessage => ({
 describe('deriveNativeChatStreamingText', () => {
   it('returns null when not working (stale preview never shows)', () => {
     expect(
-      deriveNativeChatStreamingText({ messages: [], previewText: 'Hello there', working: false })
+      deriveNativeChatStreamingText({
+        messages: [],
+        previewText: 'Hello there',
+        working: false,
+        agent: 'codex'
+      })
     ).toBeNull()
   })
 
   it('returns null for empty / whitespace preview', () => {
     expect(
-      deriveNativeChatStreamingText({ messages: [], previewText: '', working: true })
+      deriveNativeChatStreamingText({
+        messages: [],
+        previewText: '',
+        working: true,
+        agent: 'codex'
+      })
     ).toBeNull()
     expect(
-      deriveNativeChatStreamingText({ messages: [], previewText: '   ', working: true })
+      deriveNativeChatStreamingText({
+        messages: [],
+        previewText: '   ',
+        working: true,
+        agent: 'codex'
+      })
     ).toBeNull()
   })
 
@@ -42,7 +57,8 @@ describe('deriveNativeChatStreamingText', () => {
       deriveNativeChatStreamingText({
         messages: [user('do the thing')],
         previewText: 'Working on it',
-        working: true
+        working: true,
+        agent: 'codex'
       })
     ).toBe('Working on it')
   })
@@ -52,7 +68,8 @@ describe('deriveNativeChatStreamingText', () => {
       deriveNativeChatStreamingText({
         messages: [assistant('Working on it, here is the full answer.')],
         previewText: 'Working on it',
-        working: true
+        working: true,
+        agent: 'codex'
       })
     ).toBeNull()
   })
@@ -62,7 +79,8 @@ describe('deriveNativeChatStreamingText', () => {
       deriveNativeChatStreamingText({
         messages: [assistant('Same length text')],
         previewText: 'Same length text',
-        working: true
+        working: true,
+        agent: 'codex'
       })
     ).toBeNull()
   })
@@ -73,9 +91,24 @@ describe('deriveNativeChatStreamingText', () => {
       deriveNativeChatStreamingText({
         messages: [assistant('Partial')],
         previewText: 'Partial answer that is now much longer than before',
-        working: true
+        working: true,
+        agent: 'codex'
       })
     ).toBe('Partial answer that is now much longer than before')
+  })
+
+  it('suppresses the bubble for Claude, whose preview is tool output not prose', () => {
+    // Claude's hook feeds PostToolUse(Failure) text into lastAssistantMessage
+    // ("File does not exist…"), so a prose bubble from it would stream raw tool
+    // results. Its incremental output arrives via the transcript tail instead.
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [user('read the file')],
+        previewText: 'File does not exist. Note: your current working directory is /repo.',
+        working: true,
+        agent: 'claude'
+      })
+    ).toBeNull()
   })
 })
 

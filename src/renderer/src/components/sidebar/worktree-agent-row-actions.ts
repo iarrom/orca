@@ -46,6 +46,9 @@ export function activateWorktreeAgentRowTab(
   tabId: string,
   paneKey: string
 ): void {
+  // Why: opening the agent is the user "reading" it — drop any explicit
+  // Mark-as-Unread marker so the dot clears (auto-ack handles the timestamp).
+  useAppStore.getState().clearAgentsManualUnread([paneKey])
   // Черновик панельной сессии: лист ещё неизвестен — выбираем сессию в панели.
   if (paneKey === `${tabId}:`) {
     activateAndRevealWorktree(worktreeId)

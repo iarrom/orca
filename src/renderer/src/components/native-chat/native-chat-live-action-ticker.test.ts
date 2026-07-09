@@ -2,7 +2,7 @@
 // действие — активный tool-вызов новейшего сообщения либо размышление.
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
-import { deriveCurrentLiveAction } from './native-chat-live-action-ticker'
+import { deriveCurrentLiveAction, deriveLiveProseMessages } from './native-chat-live-action-ticker'
 
 function message(
   id: string,
@@ -73,5 +73,28 @@ describe('deriveCurrentLiveAction', () => {
       message('m2', 'assistant', [{ type: 'text', text: 'streaming prose' }])
     ]
     expect(deriveCurrentLiveAction(steps)).toMatchObject({ key: 'm1:tool:0', kind: 'tool' })
+  })
+})
+
+describe('deriveLiveProseMessages', () => {
+  it('returns intermediate assistant prose in order, dropping tool blocks', () => {
+    const steps = [
+      message('m1', 'assistant', [{ type: 'text', text: 'Let me look into this.' }, call('Read')]),
+      message('m2', 'tool', [result()]),
+      message('m3', 'assistant', [{ type: 'text', text: 'Found the bug.' }, call('Edit')])
+    ]
+    expect(deriveLiveProseMessages(steps)).toEqual([
+      { id: 'm1', markdown: 'Let me look into this.' },
+      { id: 'm3', markdown: 'Found the bug.' }
+    ])
+  })
+
+  it('excludes reasoning (shown via the thought ticker) and empty prose', () => {
+    const steps = [
+      message('r1', 'reasoning', [{ type: 'text', text: 'thinking…' }]),
+      message('m1', 'assistant', [call('Bash')]),
+      message('m2', 'assistant', [{ type: 'text', text: '   ' }])
+    ]
+    expect(deriveLiveProseMessages(steps)).toEqual([])
   })
 })

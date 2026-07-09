@@ -60,6 +60,10 @@
   /* [FORK] Amber "warning" role — used by Plan mode (toggle + Build). */
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  /* [FORK] Bronze accent for the Cursor-style agent Question card (Next button,
+     selected option). Sampled from the Cursor reference, not the neutral primary. */
+  --color-question-accent: var(--question-accent);
+  --color-question-accent-foreground: var(--question-accent-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -154,6 +158,9 @@
      var(--warning, #f59e0b) fallback. Dark text on amber for AA contrast. */
   --warning: #f59e0b;
   --warning-foreground: #1c1206;
+  /* [FORK] Cursor Question-card bronze; cream text for AA contrast. */
+  --question-accent: #9c6a22;
+  --question-accent-foreground: #fbf6ec;
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
@@ -247,6 +254,9 @@
   /* [FORK] Amber "warning" role for Plan mode (matches Cursor's amber pill). */
   --warning: #e8b339;
   --warning-foreground: #1c1206;
+  /* [FORK] Cursor Question-card bronze, lifted for contrast on the dark card. */
+  --question-accent: #b3823a;
+  --question-accent-foreground: #1a1206;
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
@@ -1370,6 +1380,28 @@
 
 .compact-agent-expansion-grid-expanded .compact-agent-expansion-content {
   animation: compact-agent-expansion-reveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* [FORK] Slow blink for the sidebar "agent is working" dot — a calm pulse that
+   reads as live activity without the jitter of a fast spinner. */
+@keyframes agent-working-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.animate-agent-working-blink {
+  animation: agent-working-blink 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-agent-working-blink {
+    animation: none;
+  }
 }
 
 /* [FORK] Cursor-style "shimmer" for the label of the agent's currently-active

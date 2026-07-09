@@ -24,7 +24,6 @@ import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import {
-  nativeChatComposerTargetIsRemote,
   resolveNativeChatImagePasteTarget,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
@@ -35,8 +34,7 @@ import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import type { PastedElementDump } from './native-chat-prompt-tokens'
 import { useNativeChatComposerDictation } from './use-native-chat-composer-dictation'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
-import { NativeChatModelPickerContainer } from './NativeChatModelPickerContainer'
-import { NativeChatComposerAddMenu } from './NativeChatComposerAddMenu'
+import { buildNativeChatComposerControls } from './native-chat-composer-controls'
 import type { NativeChatModelSelectionState } from './use-native-chat-model-selection'
 import type { NativeChatPlanModeState } from './use-native-chat-plan-mode'
 import { useNativeChatPlanComposer } from './use-native-chat-plan-composer'
@@ -84,6 +82,12 @@ export type NativeChatComposerProps = {
   /** [FORK] Pause auto-flushing the send queue (e.g. an interactive question
    *  card is up and a queued turn would answer it by accident). */
   queuePaused?: boolean
+  /** [FORK] When set, renders the Cursor-style project/branch/host bar aligned
+   *  above the composer box. Only the agent-panel column passes it. */
+  footerWorktreeId?: string | null
+  /** [FORK] True for a brand-new, empty chat — gates the "Plan New Idea" button
+   *  (Cursor shows it only for a fresh agent). */
+  isFreshChat?: boolean
 }
 
 export type NativeChatComposerHandle = {
@@ -123,7 +127,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       onSlashCommand,
       modelSelection,
       planModeState,
-      queuePaused = false
+      queuePaused = false,
+      footerWorktreeId,
+      isFreshChat = false
     },
     ref
   ): React.JSX.Element {
@@ -331,32 +337,19 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       setNotice
     })
 
-    // [FORK] Cursor-style model picker next to the "+" button; the container owns
-    // the persisted selection and types the matching slash command into the TUI.
-    const modelPicker = (
-      <NativeChatModelPickerContainer
-        agent={agent}
-        disabled={disabled}
-        resolveTarget={resolveTarget}
-        selection={selection}
-        update={updateModelSelection}
-      />
-    )
-
-    // [FORK] Cursor-style "+" menu (Image / Plan mode / Skills / MCP Servers)
-    // replacing the bare attach button. Skills insert the app's `$name` reference.
-    const addMenu = (
-      <NativeChatComposerAddMenu
-        agent={agent}
-        terminalTabId={terminalTabId}
-        disabled={disabled}
-        localSession={targetPtyId !== null && !nativeChatComposerTargetIsRemote(targetPtyId)}
-        onAttachImage={pickAttachment}
-        onInsertSkill={(skillName) => insertTypedText(`$${skillName} `)}
-        planMode={supportsPlanMode ? planMode : undefined}
-        onTogglePlanMode={supportsPlanMode ? togglePlanMode : undefined}
-      />
-    )
+    // [FORK] Cursor-style left-hand controls (model picker + "+" menu), built in
+    // a focused module to keep this file within the max-lines budget.
+    const { modelPicker, addMenu } = buildNativeChatComposerControls({
+      agent,
+      terminalTabId,
+      targetPtyId,
+      disabled,
+      resolveTarget,
+      selection,
+      updateModelSelection,
+      pickAttachment,
+      insertTypedText
+    })
 
     const interrupt = useCallback(() => {
       if (isWorking && onStop) {
@@ -403,6 +396,10 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       chooseSlashItem,
       interrupt,
       send,
+      // [FORK] Shift+Tab toggles plan mode (Cursor parity); gated to agents that
+      // support it so the chord is inert elsewhere.
+      supportsPlanMode,
+      togglePlanMode,
       setActiveSuggestion,
       setDraft,
       setCaret,
@@ -439,6 +436,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
           addMenu={addMenu}
           planPill={planPill}
           placeholder={planPlaceholder}
+          footerWorktreeId={footerWorktreeId}
+          isFreshChat={isFreshChat}
+          // Fresh chat + plan off: the composer's Plan pill covers the on-state.
+          showPlanNewIdeaButton={supportsPlanMode && isFreshChat && !planMode}
+          onTogglePlanMode={togglePlanMode}
           onDraftChange={(value, element) => {
             setDraft(value)
             setHistory((prev) => ({ entries: prev.entries, index: null }))

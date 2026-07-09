@@ -159,25 +159,31 @@ function ProjectSection({
         </span>
         <span className="min-w-0 flex-1 truncate">{section.repo.displayName}</span>
         {launchWorktreeId ? (
-          <AgentSessionLaunchMenu
-            worktreeId={launchWorktreeId}
-            onBeforeLaunch={() => void activateWorktreeFromSidebar(launchWorktreeId)}
-            trigger={
-              <button
-                type="button"
-                aria-label={translate(
-                  'auto.components.sidebar.agentsView.newAgentInProject',
-                  'New agent in {{value0}}',
-                  { value0: section.repo.displayName }
-                )}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
-                className="flex size-5 shrink-0 items-center justify-center rounded-md text-worktree-sidebar-foreground/60 opacity-0 transition-opacity hover:bg-worktree-sidebar-foreground/12 hover:text-worktree-sidebar-foreground group-hover/project-row:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring data-[state=open]:opacity-100"
-              >
-                <Plus className="size-3.5" strokeWidth={2.25} />
-              </button>
-            }
-          />
+          // Радикс порталит контент меню в body, но в React-дереве он остаётся
+          // потомком заголовка — а React-события всплывают по React-дереву, не
+          // по DOM. Без этой границы клик по пункту меню (выбор агента) всплыл бы
+          // в onClick заголовка и свернул папку. Гасим всплытие на обёртке.
+          <span className="contents" onClick={(e) => e.stopPropagation()}>
+            <AgentSessionLaunchMenu
+              worktreeId={launchWorktreeId}
+              onBeforeLaunch={() => void activateWorktreeFromSidebar(launchWorktreeId)}
+              trigger={
+                <button
+                  type="button"
+                  aria-label={translate(
+                    'auto.components.sidebar.agentsView.newAgentInProject',
+                    'New agent in {{value0}}',
+                    { value0: section.repo.displayName }
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="flex size-5 shrink-0 items-center justify-center rounded-md text-worktree-sidebar-foreground/60 opacity-0 transition-opacity hover:bg-worktree-sidebar-foreground/12 hover:text-worktree-sidebar-foreground group-hover/project-row:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring data-[state=open]:opacity-100"
+                >
+                  <Plus className="size-3.5" strokeWidth={2.25} />
+                </button>
+              }
+            />
+          </span>
         ) : null}
       </div>
       {expanded && visibleRows.length > 0 ? (

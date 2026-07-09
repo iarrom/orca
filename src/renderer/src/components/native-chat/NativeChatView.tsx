@@ -13,7 +13,7 @@ import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatC
 import { useNativeChatEditedMessageSend } from './use-native-chat-edited-message-send'
 import { buildNativeChatPaneCaptureHandlers } from './native-chat-pane-capture-handlers'
 import { NativeChatWaitingNotice } from './NativeChatWaitingNotice'
-import { useCursorSessionDiscovery } from './use-cursor-session-discovery'
+import { useNativeChatFallbackSession } from './use-native-chat-fallback-session'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { useNativeChatFileDrag } from './use-native-chat-file-drag'
 import { NativeChatFileDropOverlay } from './NativeChatFileDropOverlay'
@@ -33,6 +33,8 @@ import {
   appendPendingSendCache,
   commandMarkersAsMessages,
   appendCommandMarkerCache,
+  isResolvedPaneKeyTransition,
+  migratePendingSendCache,
   pendingSendsAsMessages,
   prunePendingSends,
   readCommandMarkerCache,
@@ -58,23 +60,8 @@ import { useNativeChatLaunchPromptSession } from './use-native-chat-launch-promp
 import { useNativeChatPlan } from './use-native-chat-plan'
 import { NativeChatReviewPlanCard } from './NativeChatReviewPlanCard'
 import { NativeChatSubagentContext } from './native-chat-subagent-context'
+import { emptyNativeChatContextMenuActions } from './native-chat-empty-context-menu-actions'
 // [/FORK]
-
-const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuActions, 'onPaste'> = {
-  onSplitRight: () => {},
-  onSplitDown: () => {},
-  canEqualizePaneSizes: false,
-  onEqualizePaneSizes: () => {},
-  canExpandPane: false,
-  isPaneExpanded: false,
-  onToggleExpand: () => {},
-  onForkAgentSession: () => {},
-  onSetTitle: () => {},
-  onCopyTerminalId: () => {},
-  onCopyPaneId: () => {},
-  canClosePane: false,
-  onClosePane: () => {}
-}
 
 export type NativeChatViewProps = {
   /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
@@ -90,6 +77,9 @@ export type NativeChatViewProps = {
   /** Return this pane to the hosted terminal surface. */
   onSwitchToTerminal?: () => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
+  /** [FORK] When set, renders the Cursor-style project/branch/host bar below the
+   *  composer. Only the agent-panel column passes it; the terminal overlay omits it. */
+  footerWorktreeId?: string | null
 }
 
 /**
@@ -107,7 +97,8 @@ export default function NativeChatView({
   launchAgent,
   resolvedAgent,
   onSwitchToTerminal,
-  contextMenuActions
+  contextMenuActions,
+  footerWorktreeId
 }: NativeChatViewProps): React.JSX.Element {
   // Select only this tab's status entry (shallow-compared) so an unrelated
   // pane's status tick doesn't re-render this view or re-run the resolution.
@@ -132,13 +123,20 @@ export default function NativeChatView({
   // paneKey: prefer the live entry's key; fall back to the tab id so the hook
   // still has a stable key to select live status by before any pane reports.
   const paneKey = preferredPaneKey ?? agentStatusEntry?.paneKey ?? `${terminalTabId}:`
-  // [FORK] cursor-agent не шлёт hook-сессию — id транскрипта ищется на диске.
-  const cursorSession = useCursorSessionDiscovery({
+  // [FORK] Фолбэк-сессия, когда живой hook-providerSession недоступен: cursor
+  // ищет id на диске, claude/codex восстанавливают персистентный per-pane
+  // биндинг — без угадывания свежайшего транскрипта в общей папке проекта.
+  const fallbackSession = useNativeChatFallbackSession({
+    paneKey,
     agent: (agentStatusEntry?.agentType ?? launchAgent ?? resolvedAgent ?? 'claude') as AgentType,
     terminalTabId,
-    hasSession: Boolean(
-      agentStatusEntry?.providerSession?.id ?? sleepingSession?.providerSession?.id
-    )
+    liveSessionId:
+      agentStatusEntry?.providerSession?.id ?? sleepingSession?.providerSession?.id ?? null,
+    liveTranscriptPath:
+      agentStatusEntry?.providerSession?.transcriptPath ??
+      sleepingSession?.providerSession?.transcriptPath ??
+      null,
+    hasLiveEntry: Boolean(agentStatusEntry)
   })
   return (
     <NativeChatSessionGate
@@ -153,12 +151,13 @@ export default function NativeChatView({
         <NativeChatResolvedView
           paneKey={resolution.paneKey}
           agent={resolution.agent}
-          sessionId={resolution.sessionId ?? cursorSession?.sessionId ?? null}
-          transcriptPath={resolution.transcriptPath ?? cursorSession?.transcriptPath ?? null}
+          sessionId={resolution.sessionId ?? fallbackSession.sessionId}
+          transcriptPath={resolution.transcriptPath ?? fallbackSession.transcriptPath}
           targetPtyId={targetPtyId}
           terminalTabId={terminalTabId}
           onSwitchToTerminal={onSwitchToTerminal}
           contextMenuActions={contextMenuActions}
+          footerWorktreeId={footerWorktreeId}
         />
       )}
     </NativeChatSessionGate>
@@ -173,7 +172,8 @@ function NativeChatResolvedView({
   targetPtyId,
   terminalTabId,
   onSwitchToTerminal,
-  contextMenuActions
+  contextMenuActions,
+  footerWorktreeId
 }: {
   paneKey: string
   agent: NativeChatSession['agent']
@@ -183,6 +183,7 @@ function NativeChatResolvedView({
   terminalTabId: string
   onSwitchToTerminal?: () => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
+  footerWorktreeId?: string | null
 }): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
@@ -258,8 +259,19 @@ function NativeChatResolvedView({
   // often learns its provider session id after the first send; clearing pending
   // on that transition briefly flashes the empty state before the transcript
   // user turn lands.
+  // [FORK] A fresh launch also resolves its placeholder paneKey (`${tabId}:`) to
+  // the real pane after the first send. That paneKey flip changes pendingScope,
+  // so carry (not drop) the optimistic echo across it — otherwise the chat shows
+  // an empty composer while the agent already works in the terminal.
+  const prevPendingScopeRef = useRef(pendingScope)
   useEffect(() => {
-    setPending(readPendingSendCache(pendingScope))
+    const prevScope = prevPendingScopeRef.current
+    prevPendingScopeRef.current = pendingScope
+    setPending(
+      isResolvedPaneKeyTransition(prevScope, pendingScope)
+        ? migratePendingSendCache(prevScope, pendingScope)
+        : readPendingSendCache(pendingScope)
+    )
     setWorkingInterrupted(false)
   }, [pendingScope])
   // Command markers are session-scoped because slash commands like /clear are
@@ -317,9 +329,10 @@ function NativeChatResolvedView({
       deriveNativeChatStreamingText({
         messages: sessionAfterCommandBoundaries.messages,
         previewText: hookPreview,
-        working: hookWorking
+        working: hookWorking,
+        agent
       }),
-    [sessionAfterCommandBoundaries.messages, hookPreview, hookWorking]
+    [sessionAfterCommandBoundaries.messages, hookPreview, hookWorking, agent]
   )
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
@@ -450,7 +463,9 @@ function NativeChatResolvedView({
           the pty, the composer shows its guarded state instead of racing the
           mobile driver (R8). */}
         {/* [FORK] Scale the composer with the same chat zoom (Cmd/Ctrl +/-/0) so the
-          input font stays in step with the transcript text. */}
+          input font stays in step with the transcript text. The Cursor-style
+          «проект ▾ ветка ▾ где ▾» bar now lives inside the composer, aligned to
+          its box edge (footerWorktreeId). */}
         <div style={{ zoom: fontScale.scale } as React.CSSProperties}>
           <NativeChatComposer
             ref={composerRef}
@@ -465,6 +480,8 @@ function NativeChatResolvedView({
             modelSelection={plan.modelSelection}
             planModeState={plan.planModeState}
             queuePaused={interactivePromptActive}
+            footerWorktreeId={footerWorktreeId}
+            isFreshChat={viewState.kind === 'empty'}
           />
         </div>
         {viewState.kind === 'empty' ? <div className="min-h-0 flex-1" /> : null}
