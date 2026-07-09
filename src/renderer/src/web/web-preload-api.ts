@@ -10,6 +10,7 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
@@ -34,6 +35,7 @@ import type {
   WorkspaceSessionState
 } from '../../../shared/types'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
+import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
@@ -47,7 +49,13 @@ import {
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostScope,
+  normalizeExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import {
@@ -626,15 +634,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
     },
-    aiVault: {
-      listSessions: () =>
-        Promise.resolve({
-          sessions: [],
-          issues: [],
-          scannedAt: new Date().toISOString()
-        }),
-      onWindowFocused: () => () => {}
-    },
+    aiVault: createAiVaultApi(),
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
@@ -996,6 +996,11 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
 // undefined on web and the chat view showed no messages.
 function createNativeChatApi(): NativeChatApi {
   return {
+    // [FORK] Disk session-discovery is a desktop-local fallback (IPC-only, no
+    // runtime RPC bridge). The web client has no local transcripts to scan, so
+    // it skips the fallback and relies on the live provider session / readSession.
+    discoverCursorSession: () => Promise.resolve(null),
+    discoverClaudeSession: () => Promise.resolve(null),
     readSession: (agent, sessionId, limit, transcriptPath) =>
       callRuntimeResult<NativeChatReadSessionResult>('nativeChat.readSession', {
         agent,
@@ -1113,6 +1118,48 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
       const client = getClientForEnvironment(environment)
       return client.subscribe(method, params, callbacks, { timeoutMs })
     }
+  }
+}
+
+function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
+  return {
+    listSessions: (args?: AiVaultListArgs) => {
+      const environment = requireActiveEnvironment()
+      const executionHostId = toRuntimeExecutionHostId(environment.id)
+      const requestedScope = normalizeExecutionHostScope(
+        args?.executionHostScope ?? executionHostId
+      )
+      if (requestedScope !== 'all' && requestedScope !== executionHostId) {
+        return Promise.resolve(webAiVaultUnavailableResult(requestedScope))
+      }
+      // Why: the browser client has no local filesystem; every history scan
+      // runs on the paired server and must be stamped as that runtime host.
+      return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
+        limit: args?.limit,
+        force: args?.force,
+        scopePaths: args?.scopePaths,
+        executionHostId
+      })
+    },
+    onWindowFocused: () => noopUnsubscribe
+  }
+}
+
+function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultListResult {
+  return {
+    sessions: [],
+    issues: [
+      {
+        executionHostId,
+        agent: 'codex',
+        path: executionHostId,
+        message: translate(
+          'auto.web.webPreloadApi.aiVaultUnavailableForHost',
+          'Agent Session History is not available for this execution host.'
+        )
+      }
+    ],
+    scannedAt: new Date().toISOString()
   }
 }
 
@@ -1466,6 +1513,10 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         }
       )
       return result.files.map((entry) => entry.relativePath)
+    },
+    cancelListFiles: async () => {
+      // Why: the paired-web path lists files over runtime RPC with its own
+      // request timeout; there is no host-side scan to abort from here.
     },
     search: async (args) => {
       const file = await resolveRuntimeFilePath(args.rootPath)
@@ -2456,8 +2507,7 @@ function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notification
     openSystemSettings: () => Promise.resolve(),
     getPermissionStatus: () =>
       Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
-    requestPermission: () =>
-      Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
+    probeDelivery: () => Promise.resolve({ state: 'unsupported' as const, authoritative: false }),
     playSound: () => Promise.resolve({ played: false, reason: 'missing-path' })
   }
 }
@@ -2618,19 +2668,51 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
 
 function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
-    listTargets: () => Promise.resolve([]),
-    listRemovedTargetLabels: () => Promise.resolve({}),
+    // Why: SSH connections are owned by the paired host. Read/connect route to
+    // its runtime RPC so remote worktrees can show real connection state and
+    // reconnect (STA-1468); target management stays desktop-only.
+    listTargets: async () => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return []
+      }
+      const { targets } = await callRuntimeResult<{ targets: SshTarget[] }>('ssh.listTargets')
+      return targets
+    },
+    listRemovedTargetLabels: async () => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return {}
+      }
+      const { labels } = await callRuntimeResult<{ labels: Record<string, string> }>(
+        'ssh.listRemovedTargetLabels'
+      )
+      return labels
+    },
     addTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     updateTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     removeTarget: () => Promise.resolve(),
     importConfig: () => Promise.resolve([]),
-    connect: () => Promise.resolve(null),
+    connect: async (args) => {
+      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
+        'ssh.connect',
+        { targetId: args.targetId }
+      )
+      return state
+    },
     disconnect: () => Promise.resolve(),
     terminateSessions: () => Promise.resolve(),
     resetRelay: () => Promise.resolve(),
-    getState: () => Promise.resolve(null),
+    getState: async (args) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return null
+      }
+      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
+        'ssh.getState',
+        { targetId: args.targetId }
+      )
+      return state
+    },
     needsPassphrasePrompt: () => Promise.resolve(false),
     testConnection: () =>
       Promise.resolve({

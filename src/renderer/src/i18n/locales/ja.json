@@ -137,6 +137,9 @@
         "e3bcd082ac": "Orca に接続",
         "mobileScopeRejected": "この QR コードは制限付き（モバイル）アクセスを許可します。完全な Web アプリを使うには、設定 → リモート Orca サーバー → この Orca サーバーを共有する → 新規リンク からブラウザー用アクセスリンクを開いてください。"
       },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "この実行ホストでは Agent セッション履歴を使用できません。"
+      },
       "web": {
         "preload": {
           "api": {
@@ -542,6 +545,13 @@
       },
       "ephemeralVmWorkspaceTarget": {
         "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
+      },
+      "blocked": {
+        "notification": {
+          "fallback": {
+            "de50bef680": "macOS が Orca の通知をブロックしています"
+          }
+        }
       }
     },
     "hooks": {
@@ -2563,7 +2573,10 @@
             "connectFailed": "SSH 接続に失敗しました",
             "title": "SSH 接続が必要です",
             "connectingButton": "接続中...",
-            "connectButton": "接続"
+            "connectButton": "接続",
+            "removedTitle": "SSH host removed",
+            "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
+            "removeWorkspaceButton": "Remove workspace"
           }
         }
       },
@@ -2589,8 +2602,7 @@
             "localWorkspacesOnly": "履歴からの再開はローカルワークスペースでのみ利用できます。",
             "openLocalWorkspace": "セッションを再開する前にローカルワークスペースを開いてください。",
             "sessionQueued": "セッションをキューに追加しました",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースにドロップしてください。",
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。同じホスト上のワークスペースにドロップしてください。"
           },
@@ -3685,7 +3697,8 @@
           "d36883e046": "キャンセル",
           "8c097ef04e": "Orca から。それはまだディスク上にあります。",
           "e62415c3d0": "これは削除するだけです",
-          "b79b39d865": "プロジェクトの削除"
+          "b79b39d865": "プロジェクトの削除",
+          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "アクティブなワークスペースを表示する"
@@ -4401,7 +4414,16 @@
           "5e6f7a8b9c": "This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.",
           "6f7a8b9c0d": "キャンセル",
           "7a8b9c0d1e": "Open settings",
-          "8b9c0d1e2f": "ホストを削除"
+          "8b9c0d1e2f": "ホストを削除",
+          "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
+          "oneWorkspace": "1 workspace",
+          "manyWorkspaces": "{{count}} workspaces",
+          "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
+          "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
+          "alsoForgetLocal": "Also remove these {{value0}} from Orca",
+          "advanced": "Advanced",
+          "alsoDeleteRemoteHint": "Permanently deletes the remote Git worktrees and their branches. Cannot be undone.",
+          "alsoForgetLocalHint": "Clears them from Orca only. Remote files, worktrees, and branches are left untouched."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Rename host",
@@ -4514,6 +4536,16 @@
           "importing": "インポート中...",
           "importSshConfig": "~/.ssh/config をインポートします",
           "sshPersistenceDefault": "このホスト上のリモートターミナルは、終了するかリレーをリセットするまで動作し続けます。"
+        },
+        "ForgetSshWorkspaceDialog": {
+          "reconnectFailed": "Reconnection failed",
+          "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
+          "title": "Delete “{{name}}”?",
+          "disconnectedBody": "The SSH host for this workspace is not connected. Reconnect to delete it on the remote too, or remove it from Orca only.",
+          "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
+          "cancel": "Cancel",
+          "forget": "Remove from Orca",
+          "reconnectAndDelete": "Reconnect & Delete"
         }
       },
       "shared": {
@@ -8378,7 +8410,8 @@
                   "customCommand": "カスタムコマンド",
                   "supportedAgents": "このレシピでサポートされている agent: {{value0}}。",
                   "unsupportedSavedAgent": "{{value0}} はこのテキスト生成レシピを実行できません。以下からサポートされている agent のいずれかを選択してください。",
-                  "resolveComments": "選択した未解決の PR または MR コメントから agent を開始します。"
+                  "resolveComments": "選択した未解決の PR または MR コメントから agent を開始します。",
+                  "fixPushFailure": "Start an agent when a pre-push hook or git push fails."
                 }
               }
             }
@@ -9250,7 +9283,22 @@
             "d2b9g4f315": "{{value1}}より{{value0}}commits 遅れています",
             "e9c2a5d416": "{{value0}}と同じ状態",
             "4b4a7de138": "Open review page in browser",
-            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR."
+            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
+            "pushRecovery": {
+              "4b37ae99b0": "Start the default AI agent to fix this push failure",
+              "30b8d4f181": "Fix push failure with AI",
+              "dd43c47089": "Choose an agent for this push failure",
+              "ec7bfced55": "Choose agent to fix push failure",
+              "9e5ccd00aa": "Push failure context unavailable",
+              "054ead86b1": "Fix Push Failure With AI",
+              "15b7f210d7": "Choose the agent and edit the full command input before launch.",
+              "011f9713fc": "Push blocked",
+              "60bd988f0b": "AI Fix",
+              "03d238218c": "Details",
+              "a9bf7c171a": "Push Failed",
+              "834cb3f23d": "Fix with AI",
+              "783a808870": "Close"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -9499,6 +9547,35 @@
                       "216f762bd7": "ワークスペース接続を解決できません。"
                     }
                   }
+                },
+                "push": {
+                  "failure": {
+                    "launch": {
+                      "216f762bd7": "Unable to resolve the workspace connection.",
+                      "4f4e0418a0": "Could not build the agent prompt.",
+                      "f2b47026e8": "Push failure prompt is empty. Update Source Control AI settings.",
+                      "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                      "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                      "5540ff50cc": "Could not build the agent launch command.",
+                      "a8b97d2318": "Started an AI agent for the push failure."
+                    }
+                  }
+                },
+                "recovery": {
+                  "launch": {
+                    "4f4e0418a0": "Could not build the agent prompt.",
+                    "push": {
+                      "empty": "Push failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "commit": {
+                      "empty": "Commit failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                    "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                    "5540ff50cc": "Could not build the agent launch command.",
+                    "216f762bd7": "Unable to resolve the workspace connection.",
+                    "success": "Started an AI agent for the {{value0}} failure."
+                  }
                 }
               },
               "discard": {
@@ -9649,9 +9726,7 @@
             "sessionsShownCompact": "{{value0}} 件表示",
             "originalPaneUnavailable": "元のペインは利用できなくなりました。",
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
-            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。"
           },
@@ -9736,7 +9811,13 @@
             "sessionRole": "セッション",
             "jumpToOriginalPane": "元のペインにジャンプ",
             "worktree": "ワークツリー",
-            "jumpToWorktree": "ワークツリーにジャンプ"
+            "jumpToWorktree": "ワークツリーにジャンプ",
+            "conversationNotSaved": "会話が保存されていません",
+            "recoverableEmptyDetail": "このセッションには保存された会話がありませんが、{{value0}} 件の復元可能な項目が残っています。",
+            "recoverableEmptyOpenLogHint": "ログを開いて復元できます。",
+            "emptyConversationDetail": "このセッションには保存された会話がなく、再開できません。",
+            "queuedMessages": "キュー内のメッセージ {{value0}} 件",
+            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} セッションを再開",
@@ -9762,7 +9843,8 @@
             "systemRole": "システム",
             "sessionRole": "セッション",
             "jumpToOriginalPane": "元のペインにジャンプ",
-            "jumpToWorktree": "ワークツリーにジャンプ"
+            "jumpToWorktree": "ワークツリーにジャンプ",
+            "recoverableBadge": "未保存"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "ファイルを検索",
@@ -9941,7 +10023,15 @@
           "3cd5374e22": "通知設定をまだ読み込み中です",
           "b6a994e36e": "通知音が再生できませんでした",
           "c0692baa52": "カスタムファイルの選択",
-          "ac80d97e02": "カスタムファイルの変更"
+          "ac80d97e02": "カスタムファイルの変更",
+          "56b836215c": "通知の権限を確認しています…",
+          "fd84d3e9b8": "通知は有効です",
+          "4f7bce5644": "エージェントの完了やターミナルの要対応時に macOS が通知します。",
+          "95d99b52fa": "Orca の通知を許可",
+          "94562ba367": "macOS が権限を求めています。ダイアログで許可をクリックすると、このステップは自動的に更新されます。",
+          "4f6a1da718": "システム設定を開く",
+          "90b5d2e363": "macOS が Orca の通知を配信していません",
+          "2c47f5465f": "システム設定で Orca の通知を許可するをオンにします。有効になると、このステップは自動的に更新されます。"
         },
         "OnboardingFlow": {
           "1b5e182e9f": "Orca へようこそ",
@@ -10067,6 +10157,17 @@
           "windowsDefault": "Windows の既定",
           "rightClickBehavior": "右クリックの動作",
           "rightClickBehaviorDescription": "Windows で慣れた terminal のマウス操作に合うものを選びます。"
+        },
+        "mac": {
+          "notification": {
+            "permission": {
+              "card": {
+                "f696515944": "macOS のダイアログで許可をクリックします。",
+                "3d18cf71f9": "自動的に更新されます。",
+                "721d2bedb6": "システム設定で Orca の通知を許可するをオンにします。"
+              }
+            }
+          }
         }
       },
       "new": {
@@ -10362,6 +10463,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "フローティングワークスペースを表示",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "フローティングワークスペースを最小限に抑える",
             "bfe7809a70": "{{value0}} フローティング ワークスペース ({{value1}})"
           },
@@ -12557,7 +12659,10 @@
           "contextHeader": "Context",
           "effortHeader": "Effort"
         },
-        "planPlaceholder": "Plan and design before building…"
+        "planPlaceholder": "Plan and design before building…",
+        "imagePasteFailed": "Image paste failed.",
+        "worktreeNotReady": "Worktree not ready — try again in a moment.",
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "実行中…",

@@ -137,6 +137,9 @@
         "e3bcd082ac": "连接到 Orca",
         "mobileScopeRejected": "此二维码仅授予受限（移动端）访问权限。若要使用完整 Web 应用，请从设置 → 远程 Orca 服务器 → 分享此 Orca 服务器 → 新链接打开浏览器访问链接。"
       },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "此执行主机不支持 Agent 会话历史记录。"
+      },
       "web": {
         "preload": {
           "api": {
@@ -542,6 +545,13 @@
       },
       "ephemeralVmWorkspaceTarget": {
         "projectRootRegistrationFailed": "在运行时上注册环境模板创建的项目根目录失败"
+      },
+      "blocked": {
+        "notification": {
+          "fallback": {
+            "de50bef680": "macOS 正在阻止 Orca 通知"
+          }
+        }
       }
     },
     "hooks": {
@@ -2563,7 +2573,10 @@
             "connectFailed": "SSH 连接失败",
             "title": "需要 SSH 连接",
             "connectingButton": "连接中...",
-            "connectButton": "连接"
+            "connectButton": "连接",
+            "removedTitle": "SSH host removed",
+            "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
+            "removeWorkspaceButton": "Remove workspace"
           }
         }
       },
@@ -2589,8 +2602,7 @@
             "localWorkspacesOnly": "从历史恢复仅支持本地工作区。",
             "openLocalWorkspace": "恢复会话前请先打开一个本地工作区。",
             "sessionQueued": "会话已排队",
-            "runtimeWorkspacesUnsupported": "在远程运行时托管的工作区中无法从历史记录恢复会话。",
-            "openSupportedWorkspace": "在恢复会话之前，请先打开一个本地或 SSH 工作区。",
+            "openSupportedWorkspace": "在恢复会话之前，请先打开一个工作区。",
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为将其拖放到本地工作区。",
             "sessionHostMismatchUnsupported": "此会话属于其他主机。请将其拖放到同一主机上的工作区。"
           },
@@ -3685,7 +3697,8 @@
           "d36883e046": "取消",
           "8c097ef04e": "来自 Orca。它仍保留在您的磁盘上。",
           "e62415c3d0": "这仅删除",
-          "b79b39d865": "删除项目"
+          "b79b39d865": "删除项目",
+          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "显示活动工作区"
@@ -4401,7 +4414,16 @@
           "5e6f7a8b9c": "这会从此计算机移除保存的 SSH 主机及其凭据。远程文件不会被删除。",
           "6f7a8b9c0d": "取消",
           "7a8b9c0d1e": "打开设置",
-          "8b9c0d1e2f": "删除主机"
+          "8b9c0d1e2f": "删除主机",
+          "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
+          "oneWorkspace": "1 workspace",
+          "manyWorkspaces": "{{count}} workspaces",
+          "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
+          "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
+          "alsoForgetLocal": "Also remove these {{value0}} from Orca",
+          "advanced": "Advanced",
+          "alsoDeleteRemoteHint": "Permanently deletes the remote Git worktrees and their branches. Cannot be undone.",
+          "alsoForgetLocalHint": "Clears them from Orca only. Remote files, worktrees, and branches are left untouched."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "重命名主机",
@@ -4514,6 +4536,16 @@
           "importing": "正在导入...",
           "importSshConfig": "导入 ~/.ssh/config",
           "sshPersistenceDefault": "此主机上的远程终端会保持运行，直到你结束它们或重置中继。"
+        },
+        "ForgetSshWorkspaceDialog": {
+          "reconnectFailed": "Reconnection failed",
+          "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
+          "title": "Delete “{{name}}”?",
+          "disconnectedBody": "The SSH host for this workspace is not connected. Reconnect to delete it on the remote too, or remove it from Orca only.",
+          "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
+          "cancel": "Cancel",
+          "forget": "Remove from Orca",
+          "reconnectAndDelete": "Reconnect & Delete"
         }
       },
       "shared": {
@@ -8341,7 +8373,8 @@
                   "customCommand": "自定义命令",
                   "supportedAgents": "此预设支持的智能体：{{value0}}。",
                   "unsupportedSavedAgent": "{{value0}} 无法运行此文本生成预设。请在下方选择一个支持的智能体。",
-                  "resolveComments": "从选中的未解决 PR 或 MR 评论启动智能体。"
+                  "resolveComments": "从选中的未解决 PR 或 MR 评论启动智能体。",
+                  "fixPushFailure": "Start an agent when a pre-push hook or git push fails."
                 }
               }
             }
@@ -9250,7 +9283,22 @@
             "d2b9g4f315": "落后 {{value1}} {{value0}} 个提交",
             "e9c2a5d416": "与 {{value0}} 同步",
             "4b4a7de138": "Open review page in browser",
-            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR."
+            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
+            "pushRecovery": {
+              "4b37ae99b0": "Start the default AI agent to fix this push failure",
+              "30b8d4f181": "Fix push failure with AI",
+              "dd43c47089": "Choose an agent for this push failure",
+              "ec7bfced55": "Choose agent to fix push failure",
+              "9e5ccd00aa": "Push failure context unavailable",
+              "054ead86b1": "Fix Push Failure With AI",
+              "15b7f210d7": "Choose the agent and edit the full command input before launch.",
+              "011f9713fc": "Push blocked",
+              "60bd988f0b": "AI Fix",
+              "03d238218c": "Details",
+              "a9bf7c171a": "Push Failed",
+              "834cb3f23d": "Fix with AI",
+              "783a808870": "Close"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -9499,6 +9547,35 @@
                       "216f762bd7": "无法解析工作区连接。"
                     }
                   }
+                },
+                "push": {
+                  "failure": {
+                    "launch": {
+                      "216f762bd7": "Unable to resolve the workspace connection.",
+                      "4f4e0418a0": "Could not build the agent prompt.",
+                      "f2b47026e8": "Push failure prompt is empty. Update Source Control AI settings.",
+                      "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                      "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                      "5540ff50cc": "Could not build the agent launch command.",
+                      "a8b97d2318": "Started an AI agent for the push failure."
+                    }
+                  }
+                },
+                "recovery": {
+                  "launch": {
+                    "4f4e0418a0": "Could not build the agent prompt.",
+                    "push": {
+                      "empty": "Push failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "commit": {
+                      "empty": "Commit failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                    "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                    "5540ff50cc": "Could not build the agent launch command.",
+                    "216f762bd7": "Unable to resolve the workspace connection.",
+                    "success": "Started an AI agent for the {{value0}} failure."
+                  }
                 }
               },
               "discard": {
@@ -9649,9 +9726,7 @@
             "sessionsShownCompact": "已显示 {{value0}} 个",
             "originalPaneUnavailable": "原始面板不再可用。",
             "worktreeUnavailable": "工作树不再可用。",
-            "runtimeBrowseLocalHistory": "远程运行时托管的工作区可以浏览本地历史。恢复操作在本地和 SSH 工作区中可用。",
-            "runtimeWorkspacesUnsupported": "在远程运行时托管的工作区中无法从历史记录恢复会话。",
-            "openSupportedWorkspace": "在恢复会话之前，请先打开一个本地或 SSH 工作区。",
+            "openSupportedWorkspace": "在恢复会话之前，请先打开一个工作区。",
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。",
             "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。"
           },
@@ -9736,7 +9811,13 @@
             "sessionRole": "会话",
             "jumpToOriginalPane": "跳转到原始窗格",
             "worktree": "工作树",
-            "jumpToWorktree": "跳转到工作树"
+            "jumpToWorktree": "跳转到工作树",
+            "conversationNotSaved": "对话未保存",
+            "recoverableEmptyDetail": "此会话没有已保存的对话，但仍有 {{value0}} 个可恢复项。",
+            "recoverableEmptyOpenLogHint": "打开日志以恢复它们。",
+            "emptyConversationDetail": "此会话没有已保存的对话，无法恢复。",
+            "queuedMessages": "{{value0}} 条排队消息",
+            "subagentTranscripts": "{{value0}} 个子代理记录"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",
@@ -9762,7 +9843,8 @@
             "systemRole": "系统",
             "sessionRole": "会话",
             "jumpToOriginalPane": "跳转到原始窗格",
-            "jumpToWorktree": "跳转到工作树"
+            "jumpToWorktree": "跳转到工作树",
+            "recoverableBadge": "未保存"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",
@@ -9941,7 +10023,15 @@
           "3cd5374e22": "通知设置仍在加载中",
           "b6a994e36e": "无法播放通知声音",
           "c0692baa52": "选择自定义文件",
-          "ac80d97e02": "更改自定义文件"
+          "ac80d97e02": "更改自定义文件",
+          "56b836215c": "正在检查通知权限…",
+          "fd84d3e9b8": "通知已启用",
+          "4f7bce5644": "当代理完成或终端需要处理时，macOS 会提醒你。",
+          "95d99b52fa": "允许 Orca 发送通知",
+          "94562ba367": "macOS 正在请求权限。在对话框中点按允许，此步骤会自动更新。",
+          "4f6a1da718": "打开系统设置",
+          "90b5d2e363": "macOS 未送达 Orca 的通知",
+          "2c47f5465f": "在系统设置中启用 Orca 的允许通知。启用后此步骤会自动更新。"
         },
         "OnboardingFlow": {
           "1b5e182e9f": "欢迎使用 Orca",
@@ -10067,6 +10157,17 @@
           "windowsDefault": "Windows 默认值",
           "rightClickBehavior": "右键单击行为",
           "rightClickBehaviorDescription": "选择符合你在 Windows 上使用习惯的终端鼠标行为。"
+        },
+        "mac": {
+          "notification": {
+            "permission": {
+              "card": {
+                "f696515944": "在 macOS 对话框中点按允许。",
+                "3d18cf71f9": "将自动更新。",
+                "721d2bedb6": "在系统设置中为 Orca 开启允许通知。"
+              }
+            }
+          }
         }
       },
       "new": {
@@ -10362,6 +10463,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "显示浮动工作区",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "最小化浮动工作区",
             "bfe7809a70": "{{value0}} 浮动工作区 ({{value1}})"
           },
@@ -12557,7 +12659,10 @@
           "contextHeader": "Context",
           "effortHeader": "Effort"
         },
-        "planPlaceholder": "Plan and design before building…"
+        "planPlaceholder": "Plan and design before building…",
+        "imagePasteFailed": "Image paste failed.",
+        "worktreeNotReady": "Worktree not ready — try again in a moment.",
+        "uploadingAttachments": "Uploading {{value0}} file{{value1}} to remote…"
       },
       "tool": {
         "running": "正在运行…",

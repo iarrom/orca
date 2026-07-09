@@ -1,10 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import {
-  buildAgentDraftLaunchPlan,
-  buildAgentStartupPlan,
-  type AgentStartupPlan
-} from '@/lib/tui-agent-startup'
+import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { resolveAgentStartupPlan } from '@/lib/agent-startup-plan-resolution'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
@@ -23,7 +20,6 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/types'
@@ -74,6 +70,7 @@ export type LaunchAgentInNewTabResult = {
   tabId: string | null
   startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
+  promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
 } | null
 
 /**
@@ -147,68 +144,16 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   }
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
-  // Why: argv/flag agents fold the prompt into the launch command and
-  // auto-submit — keeping behavior consistent with the composer/tab-bar `+`
-  // mental model, where the prompt is "the first turn the user sent".
-  // Followup-path and generated-context launches can deliver a prompt via
-  // post-launch bracketed paste; callers decide whether that paste remains a
-  // draft or submits after readiness.
-  let startupPlan: AgentStartupPlan | null = null
-  let pasteDraftAfterLaunch: string | null = null
-  let submitPastedPrompt = false
-  let forcePasteAfterLaunch = false
-
-  if (hasPrompt && promptDelivery === 'submit-after-ready') {
-    // Why: generated multi-line prompts are too large to echo through a shell
-    // argv/prefill command. Launch cleanly, then paste+submit inside the TUI.
-    startupPlan = buildAgentStartupPlan({
-      ...startupPlanBase,
-      prompt: '',
-      allowEmptyPromptLaunch: true
-    })
-    pasteDraftAfterLaunch = trimmedPrompt
-    submitPastedPrompt = true
-    forcePasteAfterLaunch = true
-  } else if (hasPrompt && promptDelivery === 'draft') {
-    const draftLaunchPlan = buildAgentDraftLaunchPlan({
-      ...startupPlanBase,
-      draft: trimmedPrompt
-    })
-    if (draftLaunchPlan) {
-      startupPlan = {
-        agent: draftLaunchPlan.agent,
-        launchCommand: draftLaunchPlan.launchCommand,
-        expectedProcess: draftLaunchPlan.expectedProcess,
-        followupPrompt: null,
-        launchConfig: draftLaunchPlan.launchConfig,
-        ...(draftLaunchPlan.startupCommandDelivery
-          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
-          : {}),
-        ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
-      }
-    } else {
-      startupPlan = buildAgentStartupPlan({
-        ...startupPlanBase,
-        prompt: '',
-        allowEmptyPromptLaunch: true
-      })
-      pasteDraftAfterLaunch = trimmedPrompt
-    }
-  } else if (hasPrompt && isFollowupPath) {
-    startupPlan = buildAgentStartupPlan({
-      ...startupPlanBase,
-      prompt: '',
-      allowEmptyPromptLaunch: true
-    })
-    pasteDraftAfterLaunch = trimmedPrompt
-  } else {
-    startupPlan = buildAgentStartupPlan({
-      ...startupPlanBase,
-      prompt: hasPrompt ? trimmedPrompt : '',
-      allowEmptyPromptLaunch: !hasPrompt
-    })
-  }
+  // Why: prompt delivery (argv-fold vs post-launch paste, draft vs submit) is a
+  // self-contained decision — extracted to keep this file under the line budget.
+  const {
+    startupPlan,
+    pasteDraftAfterLaunch,
+    submitPastedPrompt,
+    forcePasteAfterLaunch,
+    isFollowupPath
+  } = resolveAgentStartupPlan(agent, startupPlanBase, trimmedPrompt, promptDelivery)
+  let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
 
   if (!startupPlan) {
     return null
@@ -311,9 +256,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     // the user closed the tab or switched worktrees so the toast/telemetry
     // don't fire for user-initiated cancellation (mirrors the 5s launch
     // watchdog in QuickLaunchButton).
-    const tabId = tab.id
-    void deliverLaunchPromptToAgentTab({
-      tabId,
+    let failureNotified = false
+    const deliveryPromise = deliverLaunchPromptToAgentTab({
+      tabId: tab.id,
       content: pasteDraftAfterLaunch,
       agent,
       submit: submitPastedPrompt,
@@ -321,28 +266,28 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       onTimeout: () => {
         const state = useAppStore.getState()
         const tabsForWorktree = state.tabsByWorktree[worktreeId] ?? []
-        const tab = tabsForWorktree.find((t) => t.id === tabId)
-        // Why: if the PTY never spawned, QuickLaunch's 5s watchdog already
-        // surfaced the launch failure. Don't double-toast for the same root
-        // cause. Looking up directly in `worktreeId` (not scanning every
-        // worktree) also preserves "still in this worktree" intent.
-        if (!tab) {
-          return // tab closed by user
-        }
-        if (tab.ptyId === null) {
-          return // launch failed; QuickLaunch handled the user-facing toast
-        }
-        if (state.activeWorktreeId !== worktreeId) {
+        const currentTab = tabsForWorktree.find((t) => t.id === tab.id)
+        if (currentTab?.ptyId === null) {
+          // Why: PTY never spawned — a genuine launch failure. Stay silent so
+          // the single notice comes from the caller (source-control dialog
+          // toast, or QuickLaunch's watchdog); leaving failureNotified false lets it fire.
           return
         }
-        const label = submitPastedPrompt ? 'prompt' : 'notes'
+        if (!currentTab || state.activeWorktreeId !== worktreeId) {
+          // Why: user-initiated cancellation (closed the tab or switched
+          // worktrees) — mark notified so the deferred source-control caller
+          // suppresses its generic "couldn't start" toast too, not just this nudge.
+          failureNotified = true
+          return
+        }
         toast.message(
           translate(
             'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
             "Your {{value0}} wasn't sent — paste it once the agent is ready.",
-            { value0: label }
+            { value0: submitPastedPrompt ? 'prompt' : 'notes' }
           )
         )
+        failureNotified = true
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
           agent_kind: tuiAgentToAgentKind(agent)
@@ -353,11 +298,19 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         if (agent === 'command-code' && submitPastedPrompt) {
           // Why: Command Code has no prompt-submit hook; when Orca submits a
           // generated prompt after readiness, seed working at delivery time.
-          seedCommandCodeSubmittedPromptStatus(tabId, trimmedPrompt)
+          seedCommandCodeSubmittedPromptStatus(tab.id, trimmedPrompt)
         }
         onPromptDelivered?.()
       }
+      return { delivered, failureNotified: !delivered && failureNotified }
     })
+    if (promptDelivery === 'submit-after-ready') {
+      promptDeliveryResult = deliveryPromise
+    } else {
+      void deliveryPromise.catch((error) =>
+        console.error('Prompt delivery failed after launch', error)
+      )
+    }
   } else if (hasPrompt) {
     onPromptDelivered?.()
   }
@@ -391,5 +344,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   order.push(tab.id)
   fresh.setTabBarOrder(worktreeId, order)
 
-  return { tabId: tab.id, startupPlan, pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null }
+  return {
+    tabId: tab.id,
+    startupPlan,
+    pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
+    ...(promptDeliveryResult ? { promptDeliveryResult } : {})
+  }
 }

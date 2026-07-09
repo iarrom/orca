@@ -210,7 +210,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
 
     const {
       imageAttachments,
-      attachLocalPaths,
+      // [FORK] upstream renamed this hook export attachLocalPaths→attachResolvedPaths;
+      // keep the fork-internal name to avoid churning the queue/drop call sites.
+      attachResolvedPaths: attachLocalPaths,
       attachHostResolvedImagePaths,
       clearImageAttachments,
       removeImageAttachment
