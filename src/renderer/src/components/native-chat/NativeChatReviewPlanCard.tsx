@@ -58,7 +58,9 @@ export function NativeChatReviewPlanCard({
 
   return (
     <div className="mx-auto w-full max-w-xl px-3 pb-1 sm:px-4">
-      <div className="rounded-lg border border-border bg-card p-2 shadow-sm">
+      {/* [FORK] Фон/материал карточки как у композера ниже (bg-card + dark:bg-input/30,
+          border-input, shadow-xs) — стек читается как одна поверхность. */}
+      <div className="rounded-lg border border-input bg-card p-2 shadow-xs transition-colors dark:bg-input/30">
         <div className="mb-0.5 flex items-center justify-between">
           <span className="text-[11px] font-medium text-muted-foreground">
             {translate('components.native-chat.plan.reviewTitle', 'Review Plan')}
