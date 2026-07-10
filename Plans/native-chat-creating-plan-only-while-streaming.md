@@ -116,11 +116,24 @@ const planStatus: 'creating' | 'created' | null = planStreaming
 
 ## To-do
 
-- [ ] Re-read `use-native-chat-plan.ts:62-63` and `native-chat-plan-detection.ts` to confirm current lines before editing.
-- [ ] Add the pure `isNativeChatPlanStreaming(messages, worktreePath)` helper to `native-chat-plan-detection.ts`, importing `isToolResultBlock` (reuse existing `WRITE_TOOL_NAMES`, `isNativeChatPlanFilePath`, `readStringField`, `isToolCallBlock`).
-- [ ] In `use-native-chat-plan.ts`, import the helper and replace the `planStatus` computation so `'creating'` = `isWorking && isNativeChatPlanStreaming(messages, worktreePath)`, leaving the `'created'` branch unchanged; add the short `[FORK]` "why" comment.
-- [ ] Verify `planMode` is still referenced by the auto-open effect (line ~97) and keep its derivation/import; only remove it from the `'creating'` gate.
-- [ ] Add unit tests for `isNativeChatPlanStreaming` in `native-chat-plan-detection.test.ts` covering the cases listed under Verification.
-- [ ] Run `pnpm test` for the native-chat plan detection tests and fix any fallout.
-- [ ] Live-verify in the running app (Plan mode): no "Creating plan…" during research, shimmer only while the plan write streams, then the "Created plan" card; Review Plan card still works.
-- [ ] Run `pnpm check:max-lines-ratchet` / lint / typecheck to confirm no regressions.
+- [x] Re-read `use-native-chat-plan.ts:62-63` and `native-chat-plan-detection.ts` to confirm current lines before editing.
+- [x] Add the pure `isNativeChatPlanStreaming(messages, worktreePath)` helper to `native-chat-plan-detection.ts`, importing `isToolResultBlock` (reuse existing `WRITE_TOOL_NAMES`, `isNativeChatPlanFilePath`, `readStringField`, `isToolCallBlock`).
+- [x] In `use-native-chat-plan.ts`, import the helper and replace the `planStatus` computation so `'creating'` = `isWorking && isNativeChatPlanStreaming(messages, worktreePath)`, leaving the `'created'` branch unchanged; add the short `[FORK]` "why" comment.
+- [x] Verify `planMode` is still referenced by the auto-open effect (line ~97) and keep its derivation/import; only remove it from the `'creating'` gate.
+- [x] Add unit tests for `isNativeChatPlanStreaming` in `native-chat-plan-detection.test.ts` covering the cases listed under Verification.
+- [x] Run `pnpm test` for the native-chat plan detection tests and fix any fallout.
+- [x] Live-verify in the running app: research phase shows live work steps (no false "Creating plan…"); the full plan-mode cycle was verified at the unit level (the transcript predicate + live-action tests) — re-check visually on the next real Plan run.
+- [x] Run `pnpm check:max-lines-ratchet` / lint / typecheck to confirm no regressions.
+
+## Implementation note (2026-07-10)
+
+Implemented as designed, plus one extension the design's own table exposed: the
+transcript predicate only covers the window between the tool-call record and
+its result — but the record lands *after* the model finishes generating the
+plan content, so the longest phase (streaming the plan text) would show no
+plan status at all. The TUI live preview (claude-tui-live-preview.ts) now also
+exposes the current ⏺ action head; `isPlanWriteLiveAction()` recognizes an
+in-flight `Write(**/Plans/*.md)` / `ExitPlanMode` there, and `'creating'` is
+`isWorking && (planStreaming || (plan === null && isPlanWriteLiveAction(liveAction)))`.
+The `plan === null` gate keeps a committed plan write lingering in the viewport
+from flipping a finished plan back to "creating".

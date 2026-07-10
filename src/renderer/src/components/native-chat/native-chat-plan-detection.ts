@@ -4,7 +4,11 @@
 // and the plan tab — no native plan mode, no fragile text markers. Pure so it
 // stays unit-testable off the assembled session.
 
-import { isToolCallBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
+import {
+  isToolCallBlock,
+  isToolResultBlock,
+  type NativeChatMessage
+} from '../../../../shared/native-chat-types'
 import { basename, joinPath } from '../../lib/path'
 import {
   isNativeChatPlanFilePath,
@@ -80,6 +84,59 @@ export function deriveLatestNativeChatPlan(
     }
   }
   return latest
+}
+
+/** True when the agent is presently producing the plan: the most recent
+ *  plan-producing tool call (a `Plans/*.md` write, or `ExitPlanMode`) has no
+ *  tool-result after it yet — i.e. the write hasn't returned. Any tool-result
+ *  clears the flag, so a resolved plan write followed by more research never
+ *  reads as "creating" (the `plan != null` trap). Pure so it stays
+ *  unit-testable off the assembled transcript. */
+export function isNativeChatPlanStreaming(
+  messages: readonly NativeChatMessage[],
+  worktreePath?: string
+): boolean {
+  let planCallAwaitingResult = false
+  for (const message of messages) {
+    for (const block of message.blocks) {
+      if (isToolResultBlock(block)) {
+        planCallAwaitingResult = false
+        continue
+      }
+      if (!isToolCallBlock(block)) {
+        continue
+      }
+      if (block.name === 'ExitPlanMode') {
+        planCallAwaitingResult = true
+        continue
+      }
+      if (WRITE_TOOL_NAMES.has(block.name)) {
+        const filePath = readStringField(block.input, ['file_path', 'path', 'filePath'])
+        planCallAwaitingResult =
+          filePath !== null && isNativeChatPlanFilePath(filePath, worktreePath)
+      }
+    }
+  }
+  return planCallAwaitingResult
+}
+
+/** True when a TUI live-action head (see claude-tui-live-preview) is a
+ *  plan-producing call: a file-writing tool targeting `Plans/*.md`, or
+ *  ExitPlanMode. This is the only signal available while the model is still
+ *  GENERATING the plan content — the transcript's tool-call record only lands
+ *  once the whole input finishes streaming. */
+export function isPlanWriteLiveAction(action: string | null): boolean {
+  if (!action) {
+    return false
+  }
+  if (action.startsWith('ExitPlanMode(')) {
+    return true
+  }
+  const parenIndex = action.indexOf('(')
+  if (parenIndex <= 0 || !WRITE_TOOL_NAMES.has(action.slice(0, parenIndex))) {
+    return false
+  }
+  return /(?:^|[\\/])Plans[\\/][^)]*\.md/.test(action.slice(parenIndex + 1))
 }
 
 /** True once the agent has started implementing the plan: after the most recent

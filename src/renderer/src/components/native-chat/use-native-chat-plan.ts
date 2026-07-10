@@ -16,6 +16,8 @@ import {
 import { useNativeChatPlanMode, type NativeChatPlanModeState } from './use-native-chat-plan-mode'
 import {
   deriveLatestNativeChatPlan,
+  isNativeChatPlanStreaming,
+  isPlanWriteLiveAction,
   nativeChatPlanImplemented,
   type NativeChatDetectedPlan
 } from './native-chat-plan-detection'
@@ -45,8 +47,12 @@ export function useNativeChatPlan(params: {
   messages: readonly NativeChatMessage[]
   fileLinkContext: NativeChatFileLinkContext | null
   isWorking: boolean
+  /** The TUI viewport's current ⏺ action head (Claude panes), for detecting a
+   *  plan write while its content is still generating. */
+  liveAction?: string | null
 }): NativeChatPlanController {
-  const { agent, terminalTabId, targetPtyId, messages, fileLinkContext, isWorking } = params
+  const { agent, terminalTabId, targetPtyId, messages, fileLinkContext, isWorking, liveAction } =
+    params
   const modelSelection = useNativeChatModelSelection(agent)
   const planModeState = useNativeChatPlanMode(agent, terminalTabId)
   const planMode = agent === 'claude' && planModeState.planMode
@@ -66,10 +72,20 @@ export function useNativeChatPlan(params: {
     () => nativeChatPlanImplemented(messages, fileLinkContext?.worktreePath),
     [messages, fileLinkContext?.worktreePath]
   )
-  // [FORK] «Created plan» в переписке тоже скрываем после реализации — план уже
-  // в работе, ссылка-возврат на него становится лишней (как и карточка Review).
+  // [FORK] «Creating plan…» — только пока агент реально производит план
+  // (запись Plans/*.md или ExitPlanMode ещё без tool-result), а не всю работу в
+  // Plan-режиме: во время исследования чат показывает обычные живые шаги.
+  // «Created plan» в переписке скрываем после реализации — план уже в работе,
+  // ссылка-возврат на него становится лишней (как и карточка Review).
+  const planStreaming = useMemo(
+    () => isNativeChatPlanStreaming(messages, fileLinkContext?.worktreePath),
+    [messages, fileLinkContext?.worktreePath]
+  )
+  // The live-action branch covers the generation phase (no transcript record
+  // yet). Gated on `plan === null` so a committed plan write lingering in the
+  // viewport can't re-flip a finished plan back to "creating".
   const planStatus: 'creating' | 'created' | null =
-    isWorking && planMode
+    isWorking && (planStreaming || (plan === null && isPlanWriteLiveAction(liveAction ?? null)))
       ? 'creating'
       : plan && plan.path !== builtPlanPath && !planImplemented
         ? 'created'
