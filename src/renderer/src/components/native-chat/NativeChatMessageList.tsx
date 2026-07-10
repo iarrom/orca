@@ -81,8 +81,10 @@ function NativeChatPlanStatusLine({
 }
 
 // [FORK] Shimmering muted "Thinking…" label instead of the stock bouncing dots,
-// matching the active thought-step treatment.
-function TypingIndicatorRow(): React.JSX.Element {
+// matching the active thought-step treatment. When the TUI live preview knows
+// what the agent is doing, its spinner status replaces the static label
+// («Hardening transcript watcher…» instead of «Thinking…»).
+function TypingIndicatorRow({ label }: { label?: string | null }): React.JSX.Element {
   return (
     <div
       className="flex items-center justify-start"
@@ -91,7 +93,7 @@ function TypingIndicatorRow(): React.JSX.Element {
     >
       <div className="flex h-8 items-center text-muted-foreground">
         <span className="native-chat-step-shimmer text-sm font-medium">
-          {translate('components.native-chat.thought.active', 'Thinking…')}
+          {label ? `${label}…` : translate('components.native-chat.thought.active', 'Thinking…')}
         </span>
       </div>
     </div>
@@ -109,7 +111,8 @@ export function NativeChatMessageList({
   planStatus = null,
   planTitle = null,
   onOpenPlan,
-  onEditSendUserMessage
+  onEditSendUserMessage,
+  liveStatus = null
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -126,6 +129,9 @@ export function NativeChatMessageList({
   onOpenPlan?: () => void
   /** [FORK] Отправка отредактированного сообщения (click-to-edit пузыря). */
   onEditSendUserMessage?: (text: string) => void
+  /** [FORK] Живой статус из TUI-вьюпорта агента (спиннер): лейбл текущего
+   *  действия и признак «модель размышляет». */
+  liveStatus?: { label: string; thinking: boolean } | null
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [stuckToBottom, setStuckToBottom] = useState(true)
@@ -159,6 +165,12 @@ export function NativeChatMessageList({
     if (!isWorking || hasStreamingBubble || messages.length === 0) {
       return null
     }
+    // [FORK] While the TUI spinner reports the model is reasoning, the last
+    // transcript step is finished work — shimmering it would claim a tool is
+    // still running. The live status row below takes over instead.
+    if (liveStatus?.thinking) {
+      return null
+    }
     const last = messages.at(-1)
     if (!last) {
       return null
@@ -168,7 +180,7 @@ export function NativeChatMessageList({
       return last.id
     }
     return null
-  }, [isWorking, hasStreamingBubble, messages])
+  }, [isWorking, hasStreamingBubble, messages, liveStatus?.thinking])
 
   // Duration descriptor for each finished "Thought" step, from the gap to the
   // turn's next message.
@@ -357,7 +369,7 @@ export function NativeChatMessageList({
           {planStatus ? (
             <NativeChatPlanStatusLine status={planStatus} title={planTitle} onOpen={onOpenPlan} />
           ) : null}
-          {showTypingIndicator ? <TypingIndicatorRow /> : null}
+          {showTypingIndicator ? <TypingIndicatorRow label={liveStatus?.label} /> : null}
         </div>
       </div>
       {showJump ? (

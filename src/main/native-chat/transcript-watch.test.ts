@@ -225,6 +225,84 @@ describe('subscribeNativeChatTranscript', () => {
     expect(ids).toContain('a-2')
   })
 
+  it('comes alive when the transcript file appears only after subscribe', async () => {
+    // SessionStart can report a transcript path before the agent's first write.
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-'))
+    tempRoots.push(root)
+    const filePath = join(root, 'not-yet-written.jsonl')
+    const seen: NativeChatMessage[] = []
+
+    const before = getActiveNativeChatWatcherCount()
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5,
+      pollIntervalMs: 15
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    await writeFile(filePath, claudeLine('u-late', 'user', 'created late'))
+    await waitFor(() => seen.some((m) => m.id === 'u-late'))
+
+    // The poll retries the watcher install once the file exists (the message
+    // itself can arrive one tick earlier via the poll-driven drain).
+    await waitFor(() => getActiveNativeChatWatcherCount() === before + 1)
+    sub.unsubscribe()
+    expect(getActiveNativeChatWatcherCount()).toBe(before)
+  })
+
+  it('resolves the hook-reported transcript path even before the file exists', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-'))
+    tempRoots.push(root)
+    const filePath = join(root, 'hook-reported.jsonl')
+    const seen: NativeChatMessage[] = []
+
+    // No filePath override: resolution runs for real, finds nothing on disk,
+    // and must fall back to the hook-reported path in pending mode.
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'no-such-session',
+      claudeProjectsDir: root,
+      transcriptPath: filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5,
+      pollIntervalMs: 15
+    })
+
+    await writeFile(filePath, claudeLine('u-hook', 'user', 'first write'))
+    await waitFor(() => seen.some((m) => m.id === 'u-hook'))
+    sub.unsubscribe()
+    expect(seen.some((m) => m.id === 'u-hook')).toBe(true)
+  })
+
+  it('keeps tailing across unlink + recreate at the same path', async () => {
+    const filePath = await tempFile(claudeLine('u-1', 'user', 'hi'))
+    const seen: NativeChatMessage[] = []
+
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5,
+      pollIntervalMs: 15
+    })
+    await waitFor(() => seen.some((m) => m.id === 'u-1'))
+
+    // Unlink kills the fs.watch inode; the poll fallback must re-arm on the
+    // recreated file and read it from the top.
+    await rm(filePath)
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    await writeFile(filePath, claudeLine('u-2', 'user', 'recreated'))
+    await appendFile(filePath, claudeLine('a-2', 'assistant', 'recreated reply'))
+
+    await waitFor(() => seen.some((m) => m.id === 'a-2'))
+    sub.unsubscribe()
+    expect(seen.some((m) => m.id === 'u-2')).toBe(true)
+  })
+
   it('returns a no-op unsubscribe when the file cannot be resolved', async () => {
     const before = getActiveNativeChatWatcherCount()
     const sub = await subscribeNativeChatTranscript({

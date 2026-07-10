@@ -10,6 +10,7 @@
 
 import { watch, type FSWatcher } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
+import { extname } from 'node:path'
 import type { Readable } from 'node:stream'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
@@ -25,6 +26,8 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   filePath?: string
   /** Coalesce window for rapid fs.watch events (ms). Defaults to 40ms. */
   debounceMs?: number
+  /** Interval for the stat-polling fallback (ms). Defaults to 500ms. */
+  pollIntervalMs?: number
 }
 
 export type NativeChatTranscriptSubscription = {
@@ -37,6 +40,11 @@ export type NativeChatTranscriptSubscription = {
 // decoder is stateless per-line, so tailing reuses the same record→message
 // mapping the full reader uses.
 const DEFAULT_DEBOUNCE_MS = 40
+
+// Why: the stat-poll fallback only stats the file (readAppendedMessages exits
+// before opening when nothing was appended), so a sub-second cadence is cheap
+// and bounds worst-case delivery latency when fs.watch is deaf.
+const DEFAULT_POLL_INTERVAL_MS = 500
 
 // Why: process-wide count of live FSWatchers opened by this module. The U4 leak
 // test asserts this returns to zero after unsubscribe so a forgotten handle is
@@ -154,7 +162,19 @@ export async function subscribeNativeChatTranscript(
 ): Promise<NativeChatTranscriptSubscription> {
   const { agent, sessionId, onAppend, debounceMs } = args
   const decode = lineDecoderForAgent(agent)
-  const filePath = args.filePath ?? (await resolveSessionFilePath(agent, sessionId, args))
+  let filePath = args.filePath ?? (await resolveSessionFilePath(agent, sessionId, args))
+
+  // [FORK] A hook-reported transcript path can race the agent's first write:
+  // at SessionStart the JSONL may not exist yet, resolve returns null, and the
+  // old no-op subscription stayed deaf for the pane's whole life. Tail the
+  // reported path anyway — the polling fallback below picks the file up the
+  // moment it appears.
+  if (!filePath) {
+    const hookPath = args.transcriptPath?.trim()
+    if (hookPath && extname(hookPath) === '.jsonl') {
+      filePath = hookPath
+    }
+  }
 
   if (!filePath || !decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally
@@ -223,14 +243,52 @@ export async function subscribeNativeChatTranscript(
     }, debounceMs ?? DEFAULT_DEBOUNCE_MS)
   }
 
-  let watcher: FSWatcher
-  try {
-    watcher = watch(filePath, scheduleDrain)
-  } catch {
-    // File vanished between resolve and watch — return a no-op teardown.
-    return { unsubscribe: () => {} }
+  // [FORK] fs.watch alone is not enough: the file may not exist yet (watch
+  // throws), the handle follows the old inode across unlink/recreate, and some
+  // platforms silently drop events. The watcher stays the low-latency path;
+  // a stat-polling interval below guarantees liveness in every one of those
+  // failure modes, retrying the watcher install until it sticks.
+  let watcher: FSWatcher | null = null
+
+  function dropWatcher(): void {
+    if (!watcher) {
+      return
+    }
+    watcher.close()
+    watcher = null
+    activeWatcherCount--
   }
-  activeWatcherCount++
+
+  function tryInstallWatcher(): void {
+    if (closed || watcher) {
+      return
+    }
+    try {
+      const installed = watch(filePath!, (eventType) => {
+        // 'rename' means the path was unlinked/replaced — this handle now
+        // tracks a dead inode. Re-arm on the new file (or wait for it via poll).
+        if (eventType === 'rename') {
+          dropWatcher()
+          tryInstallWatcher()
+        }
+        scheduleDrain()
+      })
+      installed.on('error', () => {
+        dropWatcher()
+      })
+      watcher = installed
+      activeWatcherCount++
+    } catch {
+      // File missing (yet) or fd pressure — polling keeps the subscription
+      // alive and the next tick retries the install.
+    }
+  }
+
+  tryInstallWatcher()
+  const pollTimer = setInterval(() => {
+    tryInstallWatcher()
+    scheduleDrain()
+  }, args.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS)
 
   // Why: on some platforms fs.watch can miss the very first append that lands
   // between offset-seed and watcher install. Kick one debounced drain so a
@@ -247,8 +305,8 @@ export async function subscribeNativeChatTranscript(
         clearTimeout(debounceTimer)
         debounceTimer = null
       }
-      watcher.close()
-      activeWatcherCount--
+      clearInterval(pollTimer)
+      dropWatcher()
     }
   }
 }

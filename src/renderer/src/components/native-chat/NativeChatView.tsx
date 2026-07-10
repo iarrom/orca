@@ -44,10 +44,8 @@ import {
   type NativeChatCommandMarker,
   type NativeChatPendingSend
 } from './native-chat-pending'
-import {
-  deriveNativeChatStreamingText,
-  nativeChatStreamingMessage
-} from '../../../../shared/native-chat-streaming'
+import { nativeChatStreamingMessage } from '../../../../shared/native-chat-streaming'
+import { useNativeChatLiveStream } from './use-native-chat-live-stream'
 import { useNativeChatContextMenu } from './use-native-chat-context-menu'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
 import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
@@ -323,17 +321,15 @@ function NativeChatResolvedView({
     useNativeChatLaunchPromptSession(session, paneLaunchPrompt, commandMarkers)
 
   // The streaming preview bubble (if any) sits after the transcript but before
-  // the optimistic user echoes — same order mobile uses.
-  const streamingText = useMemo(
-    () =>
-      deriveNativeChatStreamingText({
-        messages: sessionAfterCommandBoundaries.messages,
-        previewText: hookPreview,
-        working: hookWorking,
-        agent
-      }),
-    [sessionAfterCommandBoundaries.messages, hookPreview, hookWorking, agent]
-  )
+  // the optimistic user echoes — same order mobile uses. Claude's preview is
+  // scraped live from the agent TUI viewport (see use-native-chat-live-stream).
+  const { streamingText, liveStatus, liveAction } = useNativeChatLiveStream({
+    agent,
+    targetPtyId,
+    hookWorking,
+    hookPreview,
+    messages: sessionAfterCommandBoundaries.messages
+  })
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries
@@ -379,7 +375,8 @@ function NativeChatResolvedView({
     targetPtyId,
     messages: sessionWithPending.messages,
     fileLinkContext,
-    isWorking
+    isWorking,
+    liveAction
   })
 
   const stopAgent = useCallback(() => {
@@ -439,6 +436,7 @@ function NativeChatResolvedView({
               planTitle={plan.plan?.title ?? null}
               onOpenPlan={plan.openPlan}
               onEditSendUserMessage={canSend ? sendEditedUserMessage : undefined}
+              liveStatus={isWorking ? liveStatus : null}
             />
           )}
         </div>

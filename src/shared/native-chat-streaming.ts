@@ -19,6 +19,19 @@ export const NATIVE_CHAT_STREAMING_ID = 'streaming'
 // and is suppressed. Agents that stream genuine partial prose keep it.
 const AGENTS_WITHOUT_PROSE_PREVIEW: ReadonlySet<AgentType> = new Set(['claude'])
 
+/** [FORK] Text of the transcript's last assistant message that carries prose —
+ *  the committed-answer baseline the TUI-scraped live preview is diffed against
+ *  (see claude-tui-live-preview.ts). */
+export function lastAssistantProseText(messages: readonly NativeChatMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const text = assistantText(messages[i])
+    if (text.length > 0) {
+      return text
+    }
+  }
+  return ''
+}
+
 /** Concatenated text of an assistant message's text blocks, trimmed. */
 function assistantText(message: NativeChatMessage | undefined): string {
   if (!message || message.role !== 'assistant') {
