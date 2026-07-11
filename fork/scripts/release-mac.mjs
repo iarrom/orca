@@ -22,7 +22,7 @@
 // нотаризован, с Computer Use хелпером; карантин снимать не нужно).
 
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -93,16 +93,27 @@ for (const key of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) 
 // 4. Релизные шаги апстрима: hardened runtime + notarize + Swift-хелпер.
 // В Keychain-режиме зовём их напрямую (upstream-верификатор требует CSC_LINK,
 // который в этом режиме не нужен); с CSC_LINK — штатный build:mac:release.
-const releaseEnv = { ...process.env, ORCA_MAC_RELEASE: '1' }
 // --arm64 / --x64 ограничивают сборку одной архитектурой (по умолчанию обе).
 const archFlags = process.argv.slice(2).filter((a) => a === '--arm64' || a === '--x64')
 if (archFlags.length > 0) {
-  // Конфигные arch-списки сильнее CLI-флагов — дублируем выбор через env.
-  releaseEnvArchOverride(archFlags)
+  // Конфигные arch-списки сильнее CLI-флагов — дублируем выбор через env,
+  // строго ДО снапшота releaseEnv, иначе флаг не доедет до electron-builder.
+  process.env.FORK_MAC_ARCHS = archFlags.map((f) => f.slice(2)).join(',')
 }
-function releaseEnvArchOverride(flags) {
-  process.env.FORK_MAC_ARCHS = flags.map((f) => f.slice(2)).join(',')
+const releaseEnv = { ...process.env, ORCA_MAC_RELEASE: '1' }
+
+// Стейл-артефакты прошлых сборок нельзя оставлять в dist/: --publish глоббит
+// каталог, и старые zip'ы утекают в новый релиз, а безверсионные dmg могли бы
+// подсунуть старую бинарь под свежим именем.
+const dist = path.join(repoRoot, 'dist')
+if (existsSync(dist)) {
+  for (const file of readdirSync(dist)) {
+    if (/\.(dmg|zip|blockmap|yml)$/.test(file)) {
+      rmSync(path.join(dist, file))
+    }
+  }
 }
+
 const releaseSteps = process.env.CSC_LINK
   ? [['pnpm', ['run', 'build:mac:release']]]
   : [
@@ -128,7 +139,6 @@ for (const [cmd, cmdArgs] of releaseSteps) {
 
 // 5. Нотаризуем и степлим сами DMG: тогда даже контейнер проходит
 // spctl -t open, а стейпл на приложении внутри уже сделал electron-builder.
-const dist = path.join(repoRoot, 'dist')
 const dmgs = readdirSync(dist).filter((f) => f.endsWith('.dmg'))
 for (const dmg of dmgs) {
   const dmgPath = path.join(dist, dmg)
